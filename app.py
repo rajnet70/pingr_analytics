@@ -55,7 +55,7 @@ st.sidebar.header("Log Management")
 
 uploaded_files = st.sidebar.file_uploader(
     "Upload Pingr JSONL logs",
-    type=["jsonl", "txt"],
+    type=None,
     accept_multiple_files=True
 )
 
