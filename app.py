@@ -3,745 +3,300 @@ import pandas as pd
 import plotly.express as px
 import json
 import hashlib
-import io
+from io import BytesIO
 
-from datetime import datetime
-
-# =====================================================
-# PINGR ANALYTICS DASHBOARD
-# Version 1.0
-# =====================================================
-
-st.set_page_config(
-    page_title="Pingr Analytics",
-    page_icon="📊",
-    layout="wide"
-)
+st.set_page_config(page_title="Pingr Analytics", page_icon="📊", layout="wide")
 
 st.markdown("""
 <style>
-.stApp {
-    background-color: #0b1020;
-    color: #e5e7eb;
-}
-[data-testid="stMetric"] {
-    background: #151d30;
-    padding: 18px;
-    border-radius: 12px;
-    border: 1px solid #27344d;
-}
-h1, h2, h3 {
-    color: #e5e7eb;
-}
+.stApp {background:#0b1020;color:#e7edf7}
+[data-testid="stMetric"] {background:#151f33;border:1px solid #2a3954;padding:14px;border-radius:12px}
 </style>
 """, unsafe_allow_html=True)
 
-
-# =====================================================
-# HEADER
-# =====================================================
-
 st.title("📊 PINGR ANALYTICS")
-st.caption("Alert intelligence • Performance analysis • Historical tracking")
-
-st.divider()
-
-
-# =====================================================
-# FILE UPLOAD
-# =====================================================
+st.caption("Pingr log intelligence • Tracked outcomes • Momentum & Pullback research")
 
 st.sidebar.header("Log Management")
-
-uploaded_files = st.sidebar.file_uploader(
+uploads = st.sidebar.file_uploader(
     "Upload Pingr JSONL logs",
     type=None,
-    accept_multiple_files=True
+    accept_multiple_files=True,
+    help="Select .jsonl or .txt log files. The parser reads one JSON object per line."
 )
 
-st.sidebar.info(
-    "Upload one or more Pingr alert logs. "
-    "Records are combined and duplicate lines are removed."
-)
-
-
-# =====================================================
-# PARSING
-# =====================================================
-
-def parse_logs(files):
-
-    records = []
-    seen = set()
-    errors = 0
-
-    for file in files:
-
-        content = file.getvalue().decode(
-            "utf-8", errors="replace"
-        )
-
-        for line_number, line in enumerate(content.splitlines(), 1):
-
+def parse_uploads(files):
+    rows, seen, errors = [], set(), []
+    for f in files or []:
+        raw = f.getvalue().decode("utf-8-sig", errors="replace")
+        for line_no, line in enumerate(raw.splitlines(), 1):
             if not line.strip():
                 continue
-
             try:
-                record = json.loads(line)
-
-                if not isinstance(record, dict):
-                    errors += 1
-                    continue
-
-                fingerprint = hashlib.sha256(
-                    json.dumps(
-                        record,
-                        sort_keys=True,
-                        default=str
-                    ).encode()
+                obj = json.loads(line)
+                if not isinstance(obj, dict):
+                    raise ValueError("JSON line is not an object")
+                fp = hashlib.sha256(
+                    json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str).encode()
                 ).hexdigest()
-
-                if fingerprint in seen:
+                if fp in seen:
                     continue
+                seen.add(fp)
+                obj["_source_file"] = f.name
+                obj["_line"] = line_no
+                rows.append(obj)
+            except Exception as exc:
+                errors.append({"file": f.name, "line": line_no, "error": str(exc)})
+    return rows, errors
 
-                seen.add(fingerprint)
+def numeric(series):
+    return pd.to_numeric(series, errors="coerce")
 
-                record["_source_file"] = file.name
-                record["_line_number"] = line_number
+def safe_df(rows):
+    return pd.json_normalize(rows, sep=".")
 
-                records.append(record)
+def show_metric_row(items):
+    cols = st.columns(len(items))
+    for col, (label, value) in zip(cols, items):
+        col.metric(label, value)
 
-            except Exception:
-                errors += 1
-
-    return records, errors
-
-
-# =====================================================
-# FIELD HELPERS
-# =====================================================
-
-def first_value(record, names):
-
-    for name in names:
-        value = record.get(name)
-
-        if value is not None:
-            return value
-
-    return None
-
-
-def number(value):
-
-    try:
-        return float(value)
-    except (ValueError, TypeError):
-        return None
-
-
-def normalise_records(records):
-
-    rows = []
-
-    for record in records:
-
-        row = dict(record)
-
-        row["_event"] = first_value(
-            record,
-            ["event", "event_type", "type", "action"]
-        )
-
-        row["_alert_type"] = first_value(
-            record,
-            [
-                "alert_type",
-                "signal_type",
-                "setup_type",
-                "strategy",
-                "detector"
-            ]
-        )
-
-        row["_symbol"] = first_value(
-            record,
-            ["symbol", "pair", "ticker"]
-        )
-
-        row["_score"] = number(first_value(
-            record,
-            ["score", "signal_score", "alert_score"]
-        ))
-
-        row["_volume_24h"] = number(first_value(
-            record,
-            [
-                "volume_24h_usdt",
-                "min_24h_volume",
-                "volume24h",
-                "quote_volume_24h",
-                "traded_volume_24h"
-            ]
-        ))
-
-        row["_vol_ratio"] = number(first_value(
-            record,
-            ["vol_ratio", "volume_ratio"]
-        ))
-
-        row["_rsi14"] = number(first_value(
-            record,
-            ["rsi14", "rsi_14", "rsi"]
-        ))
-
-        row["_rsi6"] = number(first_value(
-            record,
-            ["rsi6", "rsi_6"]
-        ))
-
-        row["_atr"] = number(first_value(
-            record,
-            ["atr_pct", "atr"]
-        ))
-
-        row["_final_return"] = number(first_value(
-            record,
-            [
-                "final_pct",
-                "final_return",
-                "return_pct",
-                "final_change_pct"
-            ]
-        ))
-
-        row["_peak_return"] = number(first_value(
-            record,
-            [
-                "peak_pct",
-                "peak_return",
-                "mfe_pct",
-                "max_favourable_excursion"
-            ]
-        ))
-
-        row["_worst_return"] = number(first_value(
-            record,
-            [
-                "worst_pct",
-                "worst_return",
-                "mae_pct",
-                "max_adverse_excursion"
-            ]
-        ))
-
-        row["_pullback_depth"] = number(first_value(
-            record,
-            ["pullback_depth", "depth", "pullback_pct"]
-        ))
-
-        row["_run24"] = number(first_value(
-            record,
-            ["run24", "run_24h", "change24"]
-        ))
-
-        rows.append(row)
-
-    return pd.DataFrame(rows)
-
-
-# =====================================================
-# MAIN DASHBOARD
-# =====================================================
-
-if not uploaded_files:
-
-    st.info("Upload your Pingr JSONL logs to begin.")
-
+if not uploads:
+    st.info("Upload one or more Pingr JSONL files to begin.")
     st.markdown("""
-    ### Dashboard modules
-
-    - Overall alert performance
-    - Momentum analysis
-    - Pullback analysis
-    - Volume intelligence
-    - RSI and MACD analysis
-    - BTC market conditions
-    - Historical performance
-    - Score effectiveness
+    **Analysis modules**
+    - Event inventory and alert counts
+    - Final tracked alert outcomes (one row per alert record)
+    - Separate 5m / 15m / 30m outcome evaluations
+    - Momentum score and technical-condition analysis
+    - Pullback depth, run-up, MA20, ATR and candle structure
+    - Scanner volume spikes versus tracked `vol_ratio`
+    - BTC direction and MACD alignment
     """)
-
     st.stop()
 
-
-records, parsing_errors = parse_logs(uploaded_files)
-
+records, errors = parse_uploads(uploads)
 if not records:
-    st.error("No valid JSON records were found.")
+    st.error("No valid JSON objects found. Check that the file is JSONL (one JSON object per line).")
     st.stop()
 
-df = normalise_records(records)
+raw = safe_df(records)
+event = raw.get("event_type", pd.Series(["unknown"] * len(raw))).fillna("unknown").astype(str)
+raw["event_type"] = event
 
+# Preserve event families as separate datasets. Do not count generic snapshots as trades.
+alert_records = raw[raw.event_type.eq("alert_record")].copy()
+outcomes = raw[raw.event_type.eq("alert_outcome")].copy()
+generic = raw[raw.event_type.eq("generic")].copy()
+setup = raw[raw.event_type.eq("setup_alert")].copy()
+continues = raw[raw.event_type.eq("momentum_continue")].copy()
+ends = raw[raw.event_type.eq("momentum_end")].copy()
 
-# =====================================================
-# OVERVIEW
-# =====================================================
+st.success(f"Loaded {len(records):,} unique JSON records from {len(uploads)} file(s).")
+st.caption(f"Duplicate lines skipped: {sum(1 for _ in [])} • Parse errors: {len(errors)}")
 
-st.header("1. Overall Overview")
+st.header("1. Log overview")
+show_metric_row([
+    ("Total records", f"{len(raw):,}"),
+    ("Tracked alert records", f"{len(alert_records):,}"),
+    ("Outcome evaluations", f"{len(outcomes):,}"),
+    ("Generic scanner snapshots", f"{len(generic):,}"),
+])
+event_counts = raw.event_type.value_counts().rename_axis("Event type").reset_index(name="Records")
+c1, c2 = st.columns([1, 1])
+with c1:
+    st.dataframe(event_counts, use_container_width=True, hide_index=True)
+with c2:
+    st.plotly_chart(px.bar(event_counts, x="Event type", y="Records", template="plotly_dark",
+                           title="Records by event type"), use_container_width=True)
 
-total_records = len(df)
+if errors:
+    with st.expander(f"Parsing errors ({len(errors)})"):
+        st.dataframe(pd.DataFrame(errors), use_container_width=True)
 
-events = (
-    df["_event"]
-    .fillna("Unclassified")
-    .astype(str)
-)
-
-event_counts = events.value_counts()
-
-c1, c2, c3, c4 = st.columns(4)
-
-c1.metric("Total Records", total_records)
-
-c2.metric(
-    "Alert Outcomes",
-    int((events == "alert_outcome").sum())
-)
-
-c3.metric(
-    "Momentum Events",
-    int(events.str.contains("momentum", case=False).sum())
-)
-
-c4.metric("Parsing Errors", parsing_errors)
-
-
-# =====================================================
-# EVENT BREAKDOWN
-# =====================================================
-
-st.subheader("Event Breakdown")
-
-event_df = event_counts.reset_index()
-event_df.columns = ["Event", "Count"]
-
-st.plotly_chart(
-    px.bar(
-        event_df,
-        x="Event",
-        y="Count",
-        title="Records by Event Type",
-        template="plotly_dark"
-    ),
-    use_container_width=True
-)
-
-
-# =====================================================
-# ALERT TYPES
-# =====================================================
-
-st.header("2. Alert Types")
-
-alert_types = (
-    df["_alert_type"]
-    .fillna("Unknown")
-    .astype(str)
-    .value_counts()
-)
-
-st.dataframe(
-    alert_types.rename("Count"),
-    use_container_width=True
-)
-
-
-# =====================================================
-# OUTCOME ANALYSIS
-# =====================================================
-
-st.header("3. Performance Analysis")
-
-outcomes = df[
-    events.eq("alert_outcome")
-].copy()
-
-if not outcomes.empty:
-
-    valid_returns = outcomes[
-        outcomes["_final_return"].notna()
-    ].copy()
-
-    if not valid_returns.empty:
-
-        winners = valid_returns[
-            valid_returns["_final_return"] > 0
-        ]
-
-        losers = valid_returns[
-            valid_returns["_final_return"] < 0
-        ]
-
-        flats = valid_returns[
-            valid_returns["_final_return"] == 0
-        ]
-
-        win_rate = (
-            len(winners) / len(valid_returns) * 100
-        )
-
-        a, b, c, d = st.columns(4)
-
-        a.metric("Tracked Outcomes", len(valid_returns))
-        b.metric("Winners", len(winners))
-        c.metric("Losers", len(losers))
-        d.metric("Win Rate", f"{win_rate:.1f}%")
-
-        st.metric(
-            "Average Final Return",
-            f"{valid_returns['_final_return'].mean():.2f}%"
-        )
-
-        st.metric(
-            "Average Peak Return",
-            (
-                f"{valid_returns['_peak_return'].mean():.2f}%"
-                if valid_returns["_peak_return"].notna().any()
-                else "Not available"
-            )
-        )
-
-        st.metric(
-            "Average Worst Movement",
-            (
-                f"{valid_returns['_worst_return'].mean():.2f}%"
-                if valid_returns["_worst_return"].notna().any()
-                else "Not available"
-            )
-        )
-
-        st.plotly_chart(
-            px.histogram(
-                valid_returns,
-                x="_final_return",
-                color_discrete_sequence=["#00cc96"],
-                title="Distribution of Final Returns",
-                template="plotly_dark"
-            ),
-            use_container_width=True
-        )
-
-        st.dataframe(
-            valid_returns[
-                [
-                    "_symbol",
-                    "_alert_type",
-                    "_score",
-                    "_final_return",
-                    "_peak_return",
-                    "_worst_return"
-                ]
-            ],
-            use_container_width=True
-        )
-
+# Helper to add typed numeric columns only when present.
+def numcol(df, source, target=None):
+    target = target or source
+    if source in df.columns:
+        df[target] = numeric(df[source])
     else:
-        st.warning(
-            "Outcome records were found, but recognised final-return "
-            "fields were not available. Field mapping needs verification."
-        )
+        df[target] = pd.NA
+    return df
 
+# Tracked alert records are the canonical final alert-performance rows in this log.
+st.header("2. Final tracked alert performance")
+if alert_records.empty:
+    st.warning("No `alert_record` events found. This file may contain scanner events only.")
 else:
-    st.warning("No alert_outcome records found in this upload.")
+    for col in ["final_percent", "peak_percent", "worst_percent", "signal_score",
+                "rsi_14", "rsi_6", "atr_pct", "vol_ratio", "taker_buy_ratio",
+                "btc_1h", "btc_4h", "pullback", "run24", "dist_ma20",
+                "change_24h", "minutes_held", "minutes_to_first_1pct"]:
+        numcol(alert_records, col)
 
-
-# =====================================================
-# MOMENTUM ANALYSIS
-# =====================================================
-
-st.header("4. Momentum Analysis")
-
-momentum = df[
-    df["_alert_type"]
-    .fillna("")
-    .astype(str)
-    .str.contains("momentum", case=False)
-].copy()
-
-if not momentum.empty:
-
-    st.metric("Momentum Records", len(momentum))
-
-    scored = momentum[
-        momentum["_score"].notna()
-    ]
-
-    if not scored.empty:
-
-        st.subheader("Momentum Score Distribution")
-
-        st.plotly_chart(
-            px.histogram(
-                scored,
-                x="_score",
-                nbins=15,
-                title="Momentum Scores",
-                template="plotly_dark"
-            ),
-            use_container_width=True
-        )
-
+    alert_records["detector"] = alert_records.get("detector", "Unknown").fillna("Unknown")
+    alert_records["symbol"] = alert_records.get("symbol", "Unknown").fillna("Unknown")
+    valid = alert_records[alert_records.final_percent.notna()].copy()
+    if not valid.empty:
+        wins = valid[valid.final_percent > 0]
+        losses = valid[valid.final_percent < 0]
+        flats = valid[valid.final_percent == 0]
+        win_rate = len(wins) / len(valid) * 100
+        show_metric_row([
+            ("Closed tracked alerts", len(valid)),
+            ("Winners", len(wins)),
+            ("Losers", len(losses)),
+            ("Win rate", f"{win_rate:.1f}%"),
+            ("Average final return", f"{valid.final_percent.mean():+.2f}%"),
+        ])
+        st.caption("These are `alert_record` final outcomes. They are not multiplied by the separate timeframe outcome evaluations.")
+        perf = valid.groupby("detector", dropna=False).agg(
+            alerts=("symbol", "count"),
+            winners=("final_percent", lambda x: int((x > 0).sum())),
+            losers=("final_percent", lambda x: int((x < 0).sum())),
+            avg_final_pct=("final_percent", "mean"),
+            avg_peak_pct=("peak_percent", "mean"),
+            avg_worst_pct=("worst_percent", "mean"),
+        ).reset_index()
+        perf["win_rate_pct"] = perf.winners / perf.alerts * 100
+        st.subheader("Performance by detector")
+        st.dataframe(perf.round(2), use_container_width=True, hide_index=True)
+        st.plotly_chart(px.bar(valid, x="symbol", y="final_percent", color="detector",
+                               hover_data=["signal_score", "peak_percent", "worst_percent"],
+                               template="plotly_dark", title="Final tracked return by alert"),
+                        use_container_width=True)
     else:
-        st.info("No recognised Momentum score fields found.")
+        st.warning("Tracked alert records exist, but `final_percent` is missing.")
 
-    st.subheader("Momentum Records")
+    st.subheader("Tracked alert ledger")
+    display_cols = [c for c in [
+        "symbol", "detector", "alert_time", "signal_score", "label",
+        "final_percent", "peak_percent", "worst_percent", "exit_reason",
+        "rsi_14", "rsi_6", "atr_pct", "vol_ratio", "taker_buy_ratio",
+        "macd_5m", "macd_15m", "macd_1h", "btc_1h", "btc_4h",
+        "btc_above_ma50_1h"
+    ] if c in alert_records.columns]
+    st.dataframe(alert_records[display_cols], use_container_width=True, hide_index=True)
 
-    st.dataframe(
-        momentum,
-        use_container_width=True
-    )
-
+st.header("3. Momentum analysis")
+mom = alert_records[alert_records.get("detector", pd.Series(index=alert_records.index, dtype=str)).eq("Momentum")].copy() if not alert_records.empty else pd.DataFrame()
+if mom.empty:
+    st.info("No Momentum `alert_record` rows found in this upload.")
 else:
-    st.info("No Momentum records identified.")
-
-
-# =====================================================
-# SCORE VS PERFORMANCE
-# =====================================================
-
-st.header("5. Score Effectiveness")
-
-if not outcomes.empty:
-
-    score_data = outcomes[
-        outcomes["_score"].notna()
-        & outcomes["_final_return"].notna()
-    ].copy()
-
-    if len(score_data) >= 3:
-
-        st.plotly_chart(
-            px.scatter(
-                score_data,
-                x="_score",
-                y="_final_return",
-                hover_data=["_symbol"],
-                trendline="ols",
-                title="Original Score vs Final Return",
-                template="plotly_dark"
-            ),
-            use_container_width=True
-        )
-
-        correlation = score_data[
-            ["_score", "_final_return"]
-        ].corr().iloc[0, 1]
-
-        st.metric(
-            "Score / Return Correlation",
-            f"{correlation:.3f}"
-        )
-
-        st.caption(
-            "Correlation is descriptive, not proof that score "
-            "causes better or worse performance."
-        )
-
+    mom["final_percent"] = numeric(mom["final_percent"])
+    mom["signal_score"] = numeric(mom["signal_score"])
+    show_metric_row([
+        ("Momentum alerts", len(mom)),
+        ("Average score", f"{mom.signal_score.mean():.1f}" if mom.signal_score.notna().any() else "n/a"),
+        ("Average final return", f"{mom.final_percent.mean():+.2f}%" if mom.final_percent.notna().any() else "n/a"),
+    ])
+    st.subheader("Score versus final tracked return")
+    plot = mom.dropna(subset=["signal_score", "final_percent"])
+    if len(plot) >= 2:
+        st.plotly_chart(px.scatter(plot, x="signal_score", y="final_percent", color="label",
+                                   hover_data=["symbol", "peak_percent", "worst_percent"],
+                                   template="plotly_dark", title="Momentum score vs final return"),
+                        use_container_width=True)
+        corr = plot[["signal_score", "final_percent"]].corr().iloc[0, 1]
+        st.metric("Sample score / return correlation", f"{corr:.3f}")
+        st.caption("Descriptive only. Small samples and market conditions can distort correlation.")
     else:
-        st.info(
-            "At least three matched score/outcome records "
-            "are required for this chart."
-        )
+        st.info("Not enough Momentum alert records with both score and final return for a comparison.")
 
+    st.subheader("Momentum technical profile")
+    tech_cols = [c for c in ["symbol", "signal_score", "final_percent", "peak_percent",
+                              "worst_percent", "rsi_14", "rsi_6", "atr_pct", "vol_ratio",
+                              "taker_buy_ratio", "macd_5m", "macd_15m", "macd_1h",
+                              "btc_1h", "btc_4h", "btc_above_ma50_1h"] if c in mom.columns]
+    st.dataframe(mom[tech_cols], use_container_width=True, hide_index=True)
 
-# =====================================================
-# VOLUME ANALYSIS
-# =====================================================
-
-st.header("6. Volume Intelligence")
-
-volume_data = df[
-    df["_volume_24h"].notna()
-    | df["_vol_ratio"].notna()
-].copy()
-
-if not volume_data.empty:
-
-    v1, v2 = st.columns(2)
-
-    with v1:
-
-        st.subheader("24h Traded Volume")
-
-        st.dataframe(
-            volume_data[
-                ["_symbol", "_volume_24h"]
-            ],
-            use_container_width=True
-        )
-
-    with v2:
-
-        st.subheader("Tracked Volume Ratio")
-
-        st.dataframe(
-            volume_data[
-                ["_symbol", "_vol_ratio"]
-            ],
-            use_container_width=True
-        )
-
-    st.caption(
-        "Tracked vol_ratio is displayed separately from scanner "
-        "5m volume spike multiples. They are not interchangeable."
-    )
-
+st.header("4. Pullback deep dive")
+pb = alert_records[alert_records.get("detector", pd.Series(index=alert_records.index, dtype=str)).eq("Pullback")].copy() if not alert_records.empty else pd.DataFrame()
+if pb.empty:
+    st.info("No Pullback `alert_record` rows found in this upload.")
 else:
-    st.info("No recognised volume fields found.")
+    for col in ["pullback", "run24", "dist_ma20", "ma20", "rsi_14", "atr_pct",
+                "vol_ratio", "taker_buy_ratio", "move_share_pct", "body_ratio",
+                "upper_wick", "lower_wick", "consec_green", "final_percent",
+                "peak_percent", "worst_percent"]:
+        numcol(pb, col)
+    show_metric_row([
+        ("Pullback alerts", len(pb)),
+        ("Average depth", f"{pb.pullback.mean():.2f}%" if pb.pullback.notna().any() else "n/a"),
+        ("Average 24h run", f"{pb.run24.mean():.2f}%" if pb.run24.notna().any() else "n/a"),
+        ("Average final return", f"{pb.final_percent.mean():+.2f}%" if pb.final_percent.notna().any() else "n/a"),
+    ])
+    pbcols = [c for c in ["symbol", "pullback", "run24", "dist_ma20", "rsi_14",
+                           "atr_pct", "vol_ratio", "taker_buy_ratio", "move_share_pct",
+                           "body_ratio", "upper_wick", "lower_wick", "consec_green",
+                           "btc_1h", "btc_4h", "btc_above_ma50_1h",
+                           "peak_percent", "worst_percent", "final_percent", "exit_reason"] if c in pb.columns]
+    st.dataframe(pb[pbcols], use_container_width=True, hide_index=True)
+    chart = pb.dropna(subset=["pullback", "final_percent"])
+    if len(chart) >= 2:
+        st.plotly_chart(px.scatter(chart, x="pullback", y="final_percent", color="symbol",
+                                   hover_data=["run24", "atr_pct", "taker_buy_ratio"],
+                                   template="plotly_dark", title="Pullback depth vs final return"),
+                        use_container_width=True)
 
-
-# =====================================================
-# RSI AND ATR
-# =====================================================
-
-st.header("7. Technical Indicators")
-
-indicator_data = df[
-    df["_rsi14"].notna()
-    | df["_rsi6"].notna()
-    | df["_atr"].notna()
-].copy()
-
-if not indicator_data.empty:
-
-    st.dataframe(
-        indicator_data[
-            [
-                "_symbol",
-                "_rsi14",
-                "_rsi6",
-                "_atr"
-            ]
-        ],
-        use_container_width=True
-    )
-
+st.header("5. Separate timeframe outcome evaluations")
+if outcomes.empty:
+    st.info("No `alert_outcome` events found.")
 else:
-    st.info("No recognised RSI or ATR fields found.")
+    for col in ["pnl_percent", "mfe_percent", "mae_percent", "original_score",
+                "original_volume_5m", "original_volume_24h", "original_rsi_15m"]:
+        numcol(outcomes, col)
+    tf_summary = outcomes.groupby("timeframe", dropna=False).agg(
+        evaluations=("alert_id", "count"),
+        unique_alerts=("alert_id", "nunique"),
+        avg_pnl_pct=("pnl_percent", "mean"),
+        avg_mfe_pct=("mfe_percent", "mean"),
+        avg_mae_pct=("mae_percent", "mean"),
+    ).reset_index()
+    st.dataframe(tf_summary.round(3), use_container_width=True, hide_index=True)
+    st.caption("Each row here is a timeframe evaluation. The same alert can appear at 5m, 15m and 30m; do not add these rows to the tracked alert count.")
+    st.subheader("Outcome evaluation detail")
+    ocols = [c for c in ["alert_id", "symbol", "timeframe", "result", "pnl_percent",
+                          "mfe_percent", "mae_percent", "original_score",
+                          "original_volume_5m", "original_volume_24h",
+                          "original_rsi_15m", "original_macd_5m",
+                          "original_macd_15m", "original_macd_1h"] if c in outcomes.columns]
+    st.dataframe(outcomes[ocols], use_container_width=True, hide_index=True)
 
-
-# =====================================================
-# PULLBACK ANALYSIS
-# =====================================================
-
-st.header("8. Pullback Deep Dive")
-
-pullbacks = df[
-    df["_alert_type"]
-    .fillna("")
-    .astype(str)
-    .str.contains("pullback", case=False)
-].copy()
-
-if not pullbacks.empty:
-
-    st.metric("Pullback Records", len(pullbacks))
-
-    pullback_columns = [
-        "_symbol",
-        "_pullback_depth",
-        "_run24",
-        "_rsi14",
-        "_rsi6",
-        "_atr",
-        "_vol_ratio",
-        "_final_return",
-        "_peak_return",
-        "_worst_return"
-    ]
-
-    st.dataframe(
-        pullbacks[
-            [c for c in pullback_columns if c in pullbacks.columns]
-        ],
-        use_container_width=True
-    )
-
-    if (
-        pullbacks["_pullback_depth"].notna().any()
-        and pullbacks["_final_return"].notna().any()
-    ):
-
-        st.plotly_chart(
-            px.scatter(
-                pullbacks,
-                x="_pullback_depth",
-                y="_final_return",
-                hover_data=["_symbol"],
-                title="Pullback Depth vs Final Return",
-                template="plotly_dark"
-            ),
-            use_container_width=True
-        )
-
+st.header("6. Scanner snapshots and volume")
+if not generic.empty:
+    for col in ["signal_score", "price_change_5m", "price_change_15m",
+                "volume_spike_5m", "volume_spike_15m", "heat_index",
+                "rsi_5m", "rsi_15m"]:
+        numcol(generic, col)
+    show_metric_row([
+        ("Generic snapshots", len(generic)),
+        ("Marked alert_sent", int(generic.get("alert_sent", pd.Series(False, index=generic.index)).fillna(False).astype(bool).sum())),
+        ("Average 5m spike", f"{generic.volume_spike_5m.mean():.2f}x" if generic.volume_spike_5m.notna().any() else "n/a"),
+        ("Average 15m spike", f"{generic.volume_spike_15m.mean():.2f}x" if generic.volume_spike_15m.notna().any() else "n/a"),
+    ])
+    st.dataframe(generic[[c for c in ["timestamp", "symbol", "signal_score", "alert_type",
+                                     "alert_sent", "price_change_5m", "volume_spike_5m",
+                                     "price_change_15m", "volume_spike_15m", "heat_index",
+                                     "rsi_5m", "rsi_15m", "macd_bullish_5m",
+                                     "macd_bullish_15m", "macd_bullish_1h", "sr_event"]
+                          if c in generic.columns]], use_container_width=True, hide_index=True)
 else:
-    st.info("No Pullback records identified.")
+    st.info("No generic scanner snapshots in this upload.")
 
+st.header("7. Setup alerts")
+if not setup.empty:
+    st.dataframe(setup[[c for c in ["timestamp", "symbol", "alert_type", "alert_sent",
+                                    "rsi_15m", "meta.pullback", "meta.run24",
+                                    "meta.dist_ma20", "meta.vol_ratio"]
+                        if c in setup.columns]], use_container_width=True, hide_index=True)
+else:
+    st.info("No setup_alert events found.")
 
-# =====================================================
-# RAW DATA
-# =====================================================
-
-st.header("9. Raw Log Explorer")
-
-with st.expander("Inspect all parsed records"):
-
-    st.dataframe(
-        df,
-        use_container_width=True
-    )
-
-
-# =====================================================
-# DOWNLOAD
-# =====================================================
-
-st.header("10. Export")
-
-csv_data = df.to_csv(index=False).encode("utf-8")
-
-st.download_button(
-    "Download Combined Dataset (CSV)",
-    data=csv_data,
-    file_name="pingr_combined_logs.csv",
-    mime="text/csv"
-)
-
-json_data = "\n".join(
-    json.dumps(record, default=str)
-    for record in records
-)
-
-st.download_button(
-    "Download Combined Dataset (JSONL)",
-    data=json_data,
-    file_name="pingr_combined_logs.jsonl",
-    mime="application/json"
-)
-
-
-# =====================================================
-# FOOTER
-# =====================================================
+st.header("8. Export")
+csv = raw.to_csv(index=False).encode("utf-8")
+st.download_button("Download parsed records (CSV)", csv, "pingr_parsed_records.csv", "text/csv")
+jsonl = "\n".join(json.dumps(r, default=str) for r in records)
+st.download_button("Download deduplicated records (JSONL)", jsonl, "pingr_deduplicated.jsonl", "application/json")
 
 st.divider()
-
-st.caption(
-    "PINGR ANALYTICS v1.0 | "
-    "Analytical tool only — does not modify Pingr."
-)
-
-st.caption(
-    "Results depend on the fields present in uploaded logs. "
-    "Unmatched alert and outcome records must not be treated as trades."
-)
+st.caption("PINGR ANALYTICS • Parser aligned to observed Pingr JSONL event names and fields. No changes are made to Pingr.")
