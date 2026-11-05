@@ -9,60 +9,34 @@ st.set_page_config(page_title="Pingr Analytics", page_icon="📊", layout="wide"
 
 st.markdown("""
 <style>
-:root {
-  --bg: #080d18;
-  --panel: #101a2b;
-  --panel2: #142238;
-  --line: rgba(148, 163, 184, .16);
-  --muted: #91a1b8;
-  --text: #edf3fb;
-  --cyan: #67d5e8;
-  --green: #42d6a4;
-  --red: #ff7185;
-}
-.stApp {
-  background:
-    radial-gradient(ellipse at 12% 0%, rgba(37, 99, 145, .17), transparent 34%),
-    radial-gradient(ellipse at 90% 8%, rgba(38, 76, 125, .12), transparent 28%),
-    var(--bg);
-  color: var(--text);
-}
-.block-container {max-width: 1480px; padding-top: 2rem; padding-bottom: 3rem;}
-[data-testid="stHeader"] {background: rgba(8,13,24,.82);}
-[data-testid="stSidebar"] {background: #0b1422; border-right: 1px solid var(--line);}
-[data-testid="stMetric"] {
-  background: linear-gradient(145deg, rgba(20,34,56,.98), rgba(13,24,40,.98));
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 18px 18px 15px;
-  box-shadow: 0 10px 30px rgba(0,0,0,.13);
-}
-[data-testid="stMetricLabel"] {color: var(--muted); font-size: .82rem; letter-spacing: .04em;}
-[data-testid="stMetricValue"] {color: var(--text); font-weight: 700; letter-spacing: -.035em;}
-h1, h2, h3 {letter-spacing: -.035em;}
-h1 {font-size: 2.35rem !important; font-weight: 750 !important;}
-h2 {font-size: 1.35rem !important; margin-top: 1.4rem !important;}
-h3 {font-size: 1.02rem !important;}
-.pingr-eyebrow {color: var(--cyan); text-transform: uppercase; letter-spacing: .18em; font-size: .72rem; font-weight: 700;}
-.pingr-subtitle {color: var(--muted); font-size: .98rem; margin-top: -.55rem;}
-.pingr-rule {height: 1px; background: linear-gradient(90deg, rgba(103,213,232,.55), rgba(148,163,184,.04)); margin: 1rem 0 1.4rem;}
-.pingr-card {
-  background: linear-gradient(145deg, rgba(19,32,52,.96), rgba(12,22,37,.96));
-  border: 1px solid var(--line); border-radius: 16px;
-  padding: 17px 19px; margin: 5px 0 12px;
-}
-.pingr-muted {color: var(--muted); font-size: .84rem;}
-div[data-testid="stExpander"] {border: 1px solid var(--line); border-radius: 14px; background: rgba(15,26,43,.58);}
-.stTabs [data-baseweb="tab-list"] {gap: 8px; border-bottom: 1px solid var(--line);}
-.stTabs [data-baseweb="tab"] {background: transparent; border-radius: 9px 9px 0 0; padding: 10px 16px;}
-.stButton button, .stDownloadButton button {border-radius: 10px; border: 1px solid var(--line);}
-[data-testid="stDataFrame"] {border: 1px solid var(--line); border-radius: 12px; overflow: hidden;}
+:root{--bg:#070c16;--panel:#0d1929;--line:rgba(130,160,190,.18);--muted:#91a4bb;--text:#edf5ff;--cyan:#22d3ee;--green:#20d6a0;--red:#fb7185}
+.stApp{background:radial-gradient(ellipse at 12% 0%,rgba(20,120,160,.13),transparent 32%),radial-gradient(ellipse at 92% 8%,rgba(52,75,150,.12),transparent 28%),var(--bg);color:var(--text)}
+.block-container{max-width:1600px;padding:1rem 1.2rem 2rem}
+[data-testid="stHeader"]{background:rgba(7,12,22,.88)}
+[data-testid="stSidebar"]{background:#091321;border-right:1px solid var(--line)}
+h1,h2,h3{letter-spacing:-.035em}
+.pingr-title{font-size:clamp(1.65rem,3vw,2.35rem);font-weight:800;letter-spacing:-.055em;margin:.1rem 0 .15rem;color:var(--text)}
+.pingr-title span{color:var(--cyan)}
+.pingr-eyebrow{color:var(--cyan);text-transform:uppercase;letter-spacing:.16em;font-size:.68rem;font-weight:800;margin-top:.3rem}
+.pingr-subtitle{color:var(--muted);font-size:.88rem;margin:.15rem 0 .6rem}
+.pingr-rule{height:1px;background:linear-gradient(90deg,rgba(34,211,238,.55),rgba(148,163,184,.03));margin:.55rem 0 .9rem}
+h2{font-size:1.15rem!important;margin:.45rem 0 .55rem!important}
+h3{font-size:.98rem!important}
+[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(18,36,58,.98),rgba(10,23,39,.98));border:1px solid var(--line);border-radius:13px;padding:11px 13px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-height:88px}
+[data-testid="stMetricLabel"]{color:var(--muted);font-size:.76rem;letter-spacing:.025em}
+[data-testid="stMetricValue"]{color:var(--text);font-weight:800;font-size:1.55rem;letter-spacing:-.04em}
+div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:12px;background:rgba(13,25,41,.68)}
+.stButton button,.stDownloadButton button{border-radius:9px;border:1px solid var(--line);min-height:40px}
+[data-testid="stDataFrame"]{border:1px solid var(--line);border-radius:10px;overflow:hidden}
+[data-testid="stPlotlyChart"]{border:1px solid rgba(130,160,190,.12);border-radius:12px;background:rgba(10,22,37,.4);padding:3px}
+@media(max-width:900px){.block-container{padding:.75rem .75rem 1.5rem}.pingr-title{font-size:1.65rem}[data-testid="stMetric"]{padding:9px 10px;min-height:80px}[data-testid="stMetricValue"]{font-size:1.25rem}}
+@media(max-width:600px){.block-container{padding:.55rem .55rem 1.25rem}.pingr-title{font-size:1.45rem}[data-testid="stMetricLabel"]{font-size:.69rem}[data-testid="stMetricValue"]{font-size:1.1rem}}
 </style>
 """, unsafe_allow_html=True)
 
 st.markdown('<div class="pingr-eyebrow">Market intelligence workspace</div>', unsafe_allow_html=True)
-st.title("PINGR <span style='color:#67d5e8'>ANALYTICS</span>", anchor=False)
-st.markdown('<div class="pingr-subtitle">Detector performance · Historical patterns · Signal quality</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-subtitle">Trading intelligence · Detector performance · Historical patterns</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
 st.sidebar.header("Log Management")
 uploads = st.sidebar.file_uploader(
@@ -229,6 +203,31 @@ metric_row([
 ])
 st.caption(f"{len(combined):,} unique records • {duplicate_count:,} duplicate records skipped • {len(errors):,} parse errors")
 
+# Graph-first overview: compact detector mix and return distribution.
+if not valid.empty:
+    overview_left, overview_right = st.columns(2)
+    with overview_left:
+        detector_mix = valid["detector"].value_counts().rename_axis("Detector").reset_index(name="Alerts")
+        mix_fig = px.pie(detector_mix, names="Detector", values="Alerts", hole=.68,
+                         color_discrete_sequence=["#20d6a0", "#8b5cf6", "#22d3ee", "#fb7185"])
+        mix_fig.update_layout(template="plotly_dark", height=235, margin=dict(l=5,r=5,t=8,b=5),
+                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                              font=dict(color="#edf5ff"), legend=dict(orientation="h",y=-.12))
+        mix_fig.add_annotation(text=f"{len(valid)}<br>alerts",x=.5,y=.5,showarrow=False,
+                               font=dict(size=17,color="#edf5ff"))
+        st.plotly_chart(mix_fig,use_container_width=True,config={"displayModeBar":False})
+    with overview_right:
+        return_values = valid["final_percent"].dropna()
+        return_fig = px.histogram(pd.DataFrame({"Final return (%)":return_values}),
+                                  x="Final return (%)",nbins=14,
+                                  color_discrete_sequence=["#22d3ee"])
+        return_fig.update_layout(template="plotly_dark",height=235,margin=dict(l=8,r=8,t=8,b=8),
+                                 paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
+                                 font=dict(color="#edf5ff"),showlegend=False,
+                                 xaxis_title="Final return (%)",yaxis_title="Alert count")
+        st.plotly_chart(return_fig,use_container_width=True,config={"displayModeBar":False})
+
+
 st.markdown('<div class="pingr-eyebrow">02 / Recent activity</div>', unsafe_allow_html=True)
 st.header("Log intelligence")
 latest_name = list(per_file.keys())[-1]
@@ -309,7 +308,7 @@ if not perf_all.empty:
         labels={"avg_return": "Average final return", "detector": ""}
     )
     fig.update_layout(
-        template="plotly_dark", height=270, margin=dict(l=8, r=12, t=12, b=8),
+        template="plotly_dark", height=245, margin=dict(l=8, r=12, t=8, b=6),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
         coloraxis_showscale=False, xaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,.12)", zeroline=True, zerolinecolor="rgba(226,232,240,.5)"),
         yaxis=dict(showgrid=False), font=dict(color="#dce7f5")
