@@ -9,15 +9,60 @@ st.set_page_config(page_title="Pingr Analytics", page_icon="📊", layout="wide"
 
 st.markdown("""
 <style>
-.stApp {background:#0b1020;color:#e7edf7}
-[data-testid="stMetric"] {background:#151f33;border:1px solid #2a3954;padding:12px;border-radius:12px}
-.block-container {padding-top:1.5rem; padding-bottom:2rem}
-.small-note {color:#9aa8bd;font-size:.88rem}
+:root {
+  --bg: #080d18;
+  --panel: #101a2b;
+  --panel2: #142238;
+  --line: rgba(148, 163, 184, .16);
+  --muted: #91a1b8;
+  --text: #edf3fb;
+  --cyan: #67d5e8;
+  --green: #42d6a4;
+  --red: #ff7185;
+}
+.stApp {
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(37, 99, 145, .17), transparent 34%),
+    radial-gradient(ellipse at 90% 8%, rgba(38, 76, 125, .12), transparent 28%),
+    var(--bg);
+  color: var(--text);
+}
+.block-container {max-width: 1480px; padding-top: 2rem; padding-bottom: 3rem;}
+[data-testid="stHeader"] {background: rgba(8,13,24,.82);}
+[data-testid="stSidebar"] {background: #0b1422; border-right: 1px solid var(--line);}
+[data-testid="stMetric"] {
+  background: linear-gradient(145deg, rgba(20,34,56,.98), rgba(13,24,40,.98));
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 18px 18px 15px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.13);
+}
+[data-testid="stMetricLabel"] {color: var(--muted); font-size: .82rem; letter-spacing: .04em;}
+[data-testid="stMetricValue"] {color: var(--text); font-weight: 700; letter-spacing: -.035em;}
+h1, h2, h3 {letter-spacing: -.035em;}
+h1 {font-size: 2.35rem !important; font-weight: 750 !important;}
+h2 {font-size: 1.35rem !important; margin-top: 1.4rem !important;}
+h3 {font-size: 1.02rem !important;}
+.pingr-eyebrow {color: var(--cyan); text-transform: uppercase; letter-spacing: .18em; font-size: .72rem; font-weight: 700;}
+.pingr-subtitle {color: var(--muted); font-size: .98rem; margin-top: -.55rem;}
+.pingr-rule {height: 1px; background: linear-gradient(90deg, rgba(103,213,232,.55), rgba(148,163,184,.04)); margin: 1rem 0 1.4rem;}
+.pingr-card {
+  background: linear-gradient(145deg, rgba(19,32,52,.96), rgba(12,22,37,.96));
+  border: 1px solid var(--line); border-radius: 16px;
+  padding: 17px 19px; margin: 5px 0 12px;
+}
+.pingr-muted {color: var(--muted); font-size: .84rem;}
+div[data-testid="stExpander"] {border: 1px solid var(--line); border-radius: 14px; background: rgba(15,26,43,.58);}
+.stTabs [data-baseweb="tab-list"] {gap: 8px; border-bottom: 1px solid var(--line);}
+.stTabs [data-baseweb="tab"] {background: transparent; border-radius: 9px 9px 0 0; padding: 10px 16px;}
+.stButton button, .stDownloadButton button {border-radius: 10px; border: 1px solid var(--line);}
+[data-testid="stDataFrame"] {border: 1px solid var(--line); border-radius: 12px; overflow: hidden;}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("PINGR ANALYTICS")
-st.caption("Log intelligence • Performance at a glance • Historical pattern recognition")
+st.markdown('<div class="pingr-eyebrow">Market intelligence workspace</div>', unsafe_allow_html=True)
+st.title("PINGR <span style='color:#67d5e8'>ANALYTICS</span>", anchor=False)
+st.markdown('<div class="pingr-subtitle">Detector performance · Historical patterns · Signal quality</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
 st.sidebar.header("Log Management")
 uploads = st.sidebar.file_uploader(
@@ -172,7 +217,8 @@ combined, alerts, outcomes, generic = prepare(combined_rows)
 valid = alerts.dropna(subset=["final_percent"]).copy() if not alerts.empty and "final_percent" in alerts else pd.DataFrame()
 
 # Main glance view
-st.header("Overview")
+st.markdown('<div class="pingr-eyebrow">01 / Performance overview</div>', unsafe_allow_html=True)
+st.header("At a glance")
 win_rate = (valid.final_percent.gt(0).mean() * 100) if not valid.empty else 0
 avg_return = valid.final_percent.mean() if not valid.empty else float("nan")
 metric_row([
@@ -183,7 +229,8 @@ metric_row([
 ])
 st.caption(f"{len(combined):,} unique records • {duplicate_count:,} duplicate records skipped • {len(errors):,} parse errors")
 
-st.header("Log-by-log synopsis")
+st.markdown('<div class="pingr-eyebrow">02 / Recent activity</div>', unsafe_allow_html=True)
+st.header("Log intelligence")
 latest_name = list(per_file.keys())[-1]
 for filename, rows in per_file.items():
     log_df, log_alerts, log_outcomes, log_generic = prepare(rows)
@@ -216,7 +263,8 @@ for filename, rows in per_file.items():
             st.info("Not enough closed-alert data to generate observations yet.")
 
 # Historical comparisons across files
-st.header("Historical pattern tracker")
+st.markdown('<div class="pingr-eyebrow">03 / Cross-log learning</div>', unsafe_allow_html=True)
+st.header("Historical patterns")
 if len(per_file) < 2:
     st.info("Upload at least two logs together to compare recurring patterns. This first version does not permanently store logs.")
 else:
@@ -239,11 +287,12 @@ else:
             lambda r: "Recurring underperformance" if r.negative_logs >= 2 else ("Mixed results" if r.logs_seen >= 2 else "Single-log observation"), axis=1
         )
         st.dataframe(recurring.round(2), use_container_width=True, hide_index=True)
-        st.caption("A pattern is labelled recurring only when the detector's average return is negative in at least two separate uploaded logs.")
+        st.caption("Historical average = equal-weighted mean of each log's detector average. Recurring underperformance requires negative log-level averages in at least two separate logs. Detector Health below uses an alert-weighted average across all tracked alerts.")
     else:
         st.info("No comparable tracked-alert outcomes found across these files.")
 
 # Compact detector health across all uploaded logs
+st.markdown('<div class="pingr-eyebrow">04 / Detector performance</div>', unsafe_allow_html=True)
 st.header("Detector health")
 perf_all = detector_summary(valid)
 if not perf_all.empty:
@@ -252,10 +301,26 @@ if not perf_all.empty:
     show["avg_return"] = show.avg_return.map(lambda x: f"{x:+.2f}%")
     show.columns = ["Detector", "Alerts", "Win rate", "Average return"]
     st.dataframe(show, use_container_width=True, hide_index=True)
+    chart_df = perf_all.sort_values("avg_return", ascending=True).copy()
+    fig = px.bar(
+        chart_df, x="avg_return", y="detector", orientation="h",
+        text=chart_df["avg_return"].map(lambda x: f"{x:+.2f}%"),
+        color="avg_return", color_continuous_scale=["#ff7185", "#263b58", "#42d6a4"],
+        labels={"avg_return": "Average final return", "detector": ""}
+    )
+    fig.update_layout(
+        template="plotly_dark", height=270, margin=dict(l=8, r=12, t=12, b=8),
+        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        coloraxis_showscale=False, xaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,.12)", zeroline=True, zerolinecolor="rgba(226,232,240,.5)"),
+        yaxis=dict(showgrid=False), font=dict(color="#dce7f5")
+    )
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 else:
     st.info("No final tracked alert outcomes available.")
 
 # Small operational pulse
+st.markdown('<div class="pingr-eyebrow">05 / Scanner telemetry</div>', unsafe_allow_html=True)
 st.header("Scanner activity")
 if not generic.empty:
     sent = generic.get("alert_sent", pd.Series(False, index=generic.index)).fillna(False).astype(bool).sum()
@@ -267,6 +332,20 @@ if not generic.empty:
         ("Avg 5m volume spike", f"{spike5:.2f}x" if pd.notna(spike5) else "—"),
         ("Avg 15m volume spike", f"{spike15:.2f}x" if pd.notna(spike15) else "—"),
     ])
+    if pd.notna(spike5) and pd.notna(spike15):
+        scanner_fig = px.bar(
+            pd.DataFrame({"Timeframe": ["5-minute", "15-minute"], "Average spike": [spike5, spike15]}),
+            x="Timeframe", y="Average spike", text_auto=".2f",
+            color="Timeframe", color_discrete_sequence=["#67d5e8", "#6689c7"]
+        )
+        scanner_fig.update_layout(
+            template="plotly_dark", height=220, margin=dict(l=8, r=8, t=10, b=8),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            showlegend=False, font=dict(color="#dce7f5"),
+            yaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,.12)", title="Average volume spike (x)"),
+            xaxis=dict(showgrid=False)
+        )
+        st.plotly_chart(scanner_fig, use_container_width=True, config={"displayModeBar": False})
 
 with st.expander("Advanced diagnostics — open only when investigating a pattern"):
     st.subheader("Tracked alert ledger")
@@ -301,7 +380,8 @@ with st.expander("Advanced diagnostics — open only when investigating a patter
         st.subheader("Parse errors")
         st.dataframe(pd.DataFrame(errors), use_container_width=True, hide_index=True)
 
-st.header("Export")
+st.markdown('<div class="pingr-eyebrow">06 / Data access</div>', unsafe_allow_html=True)
+st.header("Export & data")
 parsed_csv = combined.to_csv(index=False).encode("utf-8")
 st.download_button("Download parsed records (CSV)", parsed_csv, "pingr_parsed_records.csv", "text/csv")
 jsonl_out = "\n".join(json.dumps(r, default=str) for r in combined_rows)
