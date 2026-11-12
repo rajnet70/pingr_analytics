@@ -127,13 +127,155 @@ def detector_summary(alerts):
     a = a.dropna(subset=["final_percent"])
     if a.empty:
         return pd.DataFrame()
+    # Consistent descriptive outcome bands used by the upgraded dashboard:
+    # win >= +1%, loss <= -0.5%, neutral between those thresholds.
+    a["outcome_class"] = "neutral"
+    a.loc[a["final_percent"] >= 1.0, "outcome_class"] = "win"
+    a.loc[a["final_percent"] <= -0.5, "outcome_class"] = "loss"
     out = a.groupby("detector", dropna=False).agg(
         alerts=("final_percent", "size"),
-        wins=("final_percent", lambda x: int((x > 0).sum())),
+        wins=("outcome_class", lambda x: int((x == "win").sum())),
+        losses=("outcome_class", lambda x: int((x == "loss").sum())),
+        neutral=("outcome_class", lambda x: int((x == "neutral").sum())),
         avg_return=("final_percent", "mean"),
+        median_return=("final_percent", "median"),
+        avg_peak=("peak_percent", "mean") if "peak_percent" in a.columns else ("final_percent", "mean"),
     ).reset_index()
-    out["win_rate"] = out.wins / out.alerts * 100
+    decisive = out.wins + out.losses
+    out["win_rate"] = (out.wins / decisive.replace(0, pd.NA) * 100).fillna(0)
     return out
+
+
+def latest_outcomes(outcomes):
+    """Keep the latest timestamped evaluation per alert_id; never merge with alert_record."""
+    if outcomes.empty or not {"alert_id", "result"}.issubset(outcomes.columns):
+        return pd.DataFrame()
+    out = outcomes.copy()
+    if "timestamp" in out:
+        out["_parsed_timestamp"] = pd.to_datetime(out["timestamp"], errors="coerce", utc=True)
+        out = out.sort_values("_parsed_timestamp")
+    out = out.dropna(subset=["alert_id"]).drop_duplicates(subset=["alert_id"], keep="last")
+    return out.drop(columns=["_parsed_timestamp"], errors="ignore")
+
+
+def outcome_counts(frame):
+    if frame.empty or "result" not in frame:
+        return {"alerts": 0, "wins": 0, "losses": 0, "neutral": 0, "decisive_rate": float("nan")}
+    result = frame["result"].astype(str).str.lower()
+    wins, losses, neutral = int(result.eq("win").sum()), int(result.eq("loss").sum()), int(result.eq("neutral").sum())
+    decisive = wins + losses
+    return {"alerts": len(frame), "wins": wins, "losses": losses, "neutral": neutral,
+            "decisive_rate": wins / decisive * 100 if decisive else float("nan")}
+
+
+def render_outcome_intelligence(outcomes):
+    """Analyses alert_outcome stream independently from detector alert_record rows."""
+    st.markdown('<div class="pingr-eyebrow">05 / Signal intelligence</div>', unsafe_allow_html=True)
+    st.header("Signal intelligence")
+    latest = latest_outcomes(outcomes)
+    if latest.empty:
+        st.info("No usable alert_outcome records with alert IDs were found in these logs.")
+        return
+
+    for col in ["original_volume_5m", "original_price_change_5m", "original_rsi_15m",
+                "original_score", "pnl_percent", "mfe_percent", "mae_percent"]:
+        if col in latest:
+            latest[col] = pd.to_numeric(latest[col], errors="coerce")
+
+    c = outcome_counts(latest)
+    metric_row([
+        ("Unique evaluated alerts", f"{c['alerts']:,}"),
+        ("Wins", f"{c['wins']:,}"),
+        ("Losses", f"{c['losses']:,}"),
+        ("Neutral", f"{c['neutral']:,}"),
+        ("Decisive win rate", f"{c['decisive_rate']:.1f}%" if pd.notna(c["decisive_rate"]) else "—"),
+    ])
+    st.caption("Latest timestamped outcome per alert_id. Decisive win rate excludes neutral outcomes. This is a different stream from tracked detector records.")
+
+    st.subheader("5-minute volume spike")
+    if "original_volume_5m" in latest:
+        bins = [
+            ("<1.5×", lambda x: x < 1.5), ("1.5–3×", lambda x: 1.5 <= x < 3),
+            ("3–5×", lambda x: 3 <= x < 5), ("5–10×", lambda x: 5 <= x < 10),
+            (">10×", lambda x: x >= 10),
+        ]
+        rows = []
+        for label, test in bins:
+            group = latest[latest.original_volume_5m.notna() & latest.original_volume_5m.map(test)]
+            stats = outcome_counts(group)
+            rows.append({"Volume ratio": label, "Alerts": stats["alerts"], "Wins": stats["wins"],
+                         "Losses": stats["losses"], "Neutral": stats["neutral"],
+                         "Win rate · decisive": stats["decisive_rate"]})
+        volume_table = pd.DataFrame(rows)
+        st.dataframe(volume_table.style.format({"Win rate · decisive": "{:.1f}%"}), use_container_width=True, hide_index=True)
+        high = latest[latest.original_volume_5m >= 5]
+        low = latest[latest.original_volume_5m.notna() & (latest.original_volume_5m < 5)]
+        hs, ls = outcome_counts(high), outcome_counts(low)
+        st.info(
+            f"Exploratory split: ≥5× has {hs['wins']} wins / {hs['losses']} losses / {hs['neutral']} neutral "
+            f"({hs['decisive_rate']:.1f}% decisive win rate); below 5× has {ls['wins']} / {ls['losses']} / "
+            f"{ls['neutral']} ({ls['decisive_rate']:.1f}%). Observational sample only—not a live filter recommendation."
+        )
+    else:
+        st.info("The uploaded alert_outcome records do not contain original_volume_5m.")
+
+    left, right = st.columns(2)
+    with left:
+        st.subheader("RSI 15m by outcome")
+        if "original_rsi_15m" in latest:
+            bands = [("<30", lambda x:x<30),("30–40",lambda x:30<=x<40),("40–50",lambda x:40<=x<50),
+                     ("50–60",lambda x:50<=x<60),("60–70",lambda x:60<=x<70),("≥70",lambda x:x>=70)]
+            rs=[]
+            for label, fn in bands:
+                g=latest[latest.original_rsi_15m.notna() & latest.original_rsi_15m.map(fn)]
+                z=outcome_counts(g)
+                rs.append({"RSI band":label,"Alerts":z["alerts"],"Wins":z["wins"],"Losses":z["losses"],
+                           "Neutral":z["neutral"],"Decisive win %":z["decisive_rate"]})
+            st.dataframe(pd.DataFrame(rs).style.format({"Decisive win %":"{:.1f}"}),use_container_width=True,hide_index=True)
+        else:
+            st.caption("RSI 15m is not present in this outcome stream.")
+    with right:
+        st.subheader("MACD by timeframe")
+        macd_rows=[]
+        for field,label in [("original_macd_5m","5m"),("original_macd_15m","15m"),("original_macd_1h","1h")]:
+            if field not in latest: continue
+            known=latest[latest[field].map(lambda x:isinstance(x,bool))]
+            for bullish,group_label in [(True,"Bullish"),(False,"Not bullish")]:
+                g=known[known[field].eq(bullish)]
+                z=outcome_counts(g)
+                macd_rows.append({"TF":label,"State":group_label,"Alerts":z["alerts"],"W/L/N":f"{z['wins']}/{z['losses']}/{z['neutral']}",
+                                  "Decisive win %":z["decisive_rate"]})
+        if macd_rows:
+            st.dataframe(pd.DataFrame(macd_rows).style.format({"Decisive win %":"{:.1f}"}),use_container_width=True,hide_index=True)
+        else:
+            st.caption("MACD fields are not present in this outcome stream.")
+
+    st.subheader("Score calibration")
+    if "original_score" in latest:
+        score_bands=[("≤8",lambda x:x<=8),("9–10",lambda x:9<=x<=10),("11–12",lambda x:11<=x<=12),
+                     ("13–16",lambda x:13<=x<=16),("17+",lambda x:x>=17)]
+        score_rows=[]
+        for label,fn in score_bands:
+            g=latest[latest.original_score.notna() & latest.original_score.map(fn)]
+            z=outcome_counts(g)
+            score_rows.append({"Score":label,"Alerts":z["alerts"],"Wins":z["wins"],"Losses":z["losses"],
+                               "Neutral":z["neutral"],"Decisive win %":z["decisive_rate"]})
+        st.dataframe(pd.DataFrame(score_rows).style.format({"Decisive win %":"{:.1f}"}),use_container_width=True,hide_index=True)
+        st.caption("Score bands are descriptive. Small samples and overlapping signal conditions prevent causal conclusions.")
+
+    st.subheader("Price movement and outcome")
+    required={"original_price_change_5m","original_rsi_15m","original_volume_5m"}
+    available=[x for x in ["original_price_change_5m","original_volume_5m","original_rsi_15m","pnl_percent","mfe_percent","mae_percent"] if x in latest]
+    if available:
+        summary=[]
+        for result in ["win","loss","neutral"]:
+            g=latest[latest.result.astype(str).str.lower().eq(result)]
+            row={"Outcome":result.title(),"Alerts":len(g)}
+            for field in available:
+                row[field.replace("original_","").replace("_"," ")] = pd.to_numeric(g[field],errors="coerce").median()
+            summary.append(row)
+        st.dataframe(pd.DataFrame(summary).round(3),use_container_width=True,hide_index=True)
+    st.caption("All comparisons use the latest logged evaluation per alert ID. They describe this sample and do not establish future predictive performance.")
 
 
 def synopsis_observations(alerts, generic):
@@ -246,10 +388,11 @@ for filename, rows in per_file.items():
         perf_log = detector_summary(log_valid)
         if not perf_log.empty:
             st.markdown("**Detector snapshot**")
-            show = perf_log[["detector", "alerts", "win_rate", "avg_return"]].copy()
-            show["win_rate"] = show.win_rate.map(lambda x: f"{x:.0f}%")
+            show = perf_log[["detector", "alerts", "wins", "losses", "neutral", "win_rate", "avg_return", "median_return"]].copy()
+            show["win_rate"] = show.win_rate.map(lambda x: f"{x:.1f}%")
             show["avg_return"] = show.avg_return.map(lambda x: f"{x:+.2f}%")
-            show.columns = ["Detector", "Alerts", "Win rate", "Avg return"]
+            show["median_return"] = show.median_return.map(lambda x: f"{x:+.2f}%")
+            show.columns = ["Detector", "Alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
             st.dataframe(show, use_container_width=True, hide_index=True)
         notes = synopsis_observations(log_valid, log_generic)
         st.markdown("**What stood out**")
@@ -295,10 +438,11 @@ st.markdown('<div class="pingr-eyebrow">04 / Detector performance</div>', unsafe
 st.header("Detector health")
 perf_all = detector_summary(valid)
 if not perf_all.empty:
-    show = perf_all[["detector", "alerts", "win_rate", "avg_return"]].copy()
+    show = perf_all[["detector", "alerts", "wins", "losses", "neutral", "win_rate", "avg_return", "median_return"]].copy()
     show["win_rate"] = show.win_rate.map(lambda x: f"{x:.1f}%")
     show["avg_return"] = show.avg_return.map(lambda x: f"{x:+.2f}%")
-    show.columns = ["Detector", "Alerts", "Win rate", "Average return"]
+    show["median_return"] = show.median_return.map(lambda x: f"{x:+.2f}%")
+    show.columns = ["Detector", "Alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Average return", "Median return"]
     st.dataframe(show, use_container_width=True, hide_index=True)
     chart_df = perf_all.sort_values("avg_return", ascending=True).copy()
     fig = px.bar(
@@ -318,8 +462,11 @@ if not perf_all.empty:
 else:
     st.info("No final tracked alert outcomes available.")
 
+# Analyse alert_outcome records separately; never join them to alert_record rows.
+render_outcome_intelligence(outcomes)
+
 # Small operational pulse
-st.markdown('<div class="pingr-eyebrow">05 / Scanner telemetry</div>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-eyebrow">06 / Scanner telemetry</div>', unsafe_allow_html=True)
 st.header("Scanner activity")
 if not generic.empty:
     sent = generic.get("alert_sent", pd.Series(False, index=generic.index)).fillna(False).astype(bool).sum()
@@ -387,4 +534,4 @@ jsonl_out = "\n".join(json.dumps(r, default=str) for r in combined_rows)
 st.download_button("Download deduplicated records (JSONL)", jsonl_out, "pingr_deduplicated.jsonl", "application/json")
 
 st.divider()
-st.caption("PINGR ANALYTICS • Synopsis and pattern tracker • No changes are made to Pingr.")
+st.caption("PINGR ANALYTICS • Signal intelligence and detector diagnostics • Dashboard-only analysis; no changes are made to Pingr engine or configuration.")
