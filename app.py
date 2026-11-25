@@ -492,7 +492,7 @@ st.markdown('<div class="pingr-subtitle">Decision-focused performance · Detecto
 st.sidebar.header("Data connection")
 st.sidebar.caption("Private GitHub archive · pingr-log-archive")
 st.sidebar.metric("Log files loaded", f'{archive_status["loaded"]:,}')
-st.sidebar.caption(f'Latest file: {archive_status["updated"]}')
+st.sidebar.caption(f'Newest file in archive: {archive_status["updated"]}')
 if st.sidebar.button("Refresh latest data", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
@@ -601,7 +601,13 @@ else:
 # 5. Latest archive log — explicit latest file metadata and useful activity, not raw telemetry.
 st.header("Latest log file")
 if latest_name:
-    st.markdown(f"**{latest_name}**")
+    st.markdown(f"**Newest file currently present in GitHub archive:** {latest_name}")
+    if pd.notna(latest_time):
+        archive_age_hours = (pd.Timestamp.now(tz="UTC") - latest_time).total_seconds() / 3600
+        if archive_age_hours > 12:
+            st.error(f"ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
+        else:
+            st.success(f"Archive freshness: newest event is {archive_age_hours:.1f} hours old.")
     file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
     file_records = len(latest_rows)
     metric_row([
