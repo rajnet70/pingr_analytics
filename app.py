@@ -481,17 +481,14 @@ if pd.isna(latest_event_ts):
     st.stop()
 session_end = latest_event_ts
 session_start = session_end - pd.Timedelta(hours=6)
-session_mask = combined["_ts"].between(session_start, session_end, inclusive="both")
-session_frame = combined.loc[session_mask].drop(columns=["_ts"], errors="ignore")
-combined, alerts, outcomes, generic = prepare(session_frame.to_dict("records"))
-if not combined.empty and "timestamp" in combined.columns:
-    combined["_ts"] = pd.to_datetime(combined["timestamp"], errors="coerce", utc=True)
-else:
-    combined["_ts"] = pd.NaT
-if not alerts.empty and "timestamp" in alerts.columns:
-    alerts["_ts"] = pd.to_datetime(alerts["timestamp"], errors="coerce", utc=True)
-if not outcomes.empty and "timestamp" in outcomes.columns:
-    outcomes["_ts"] = pd.to_datetime(outcomes["timestamp"], errors="coerce", utc=True)
+session_mask = combined["_ts"].between(session_start, session_end)
+session_frame = combined.loc[session_mask].copy()
+combined = session_frame.copy()
+# Filter the already-prepared event streams directly. Avoid re-normalizing JSON
+# records, which can change pandas dtypes and trigger runtime errors.
+alerts = alerts.loc[alerts["_ts"].between(session_start, session_end)].copy() if not alerts.empty and "_ts" in alerts else alerts.iloc[0:0].copy()
+outcomes = outcomes.loc[outcomes["_ts"].between(session_start, session_end)].copy() if not outcomes.empty and "_ts" in outcomes else outcomes.iloc[0:0].copy()
+generic = generic.loc[generic["timestamp"].map(lambda value: pd.to_datetime(value, errors="coerce", utc=True)).between(session_start, session_end)].copy() if not generic.empty and "timestamp" in generic else generic.iloc[0:0].copy()
 valid = alerts.dropna(subset=["final_percent"]).copy() if not alerts.empty and "final_percent" in alerts else pd.DataFrame()
 session_start_pak = session_start.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M %p PKT")
 session_end_pak = session_end.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M %p PKT")
