@@ -4,8 +4,16 @@ import plotly.express as px
 import json
 import hashlib
 from io import BytesIO
+import os
+import base64
+import requests
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Pingr Analytics", page_icon="📊", layout="wide")
+
+# Poll the archive branch automatically; cached Git blobs prevent repeat downloads.
+st_autorefresh(interval=120000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
@@ -36,14 +44,108 @@ div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:12px;ba
 
 st.markdown('<div class="pingr-eyebrow">Market intelligence workspace</div>', unsafe_allow_html=True)
 st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
-st.markdown('<div class="pingr-subtitle">Trading intelligence · Detector performance · Historical patterns</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-subtitle">Live GitHub archive · Trading intelligence · Detector performance · Historical patterns</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
-st.sidebar.header("Log Management")
-uploads = st.sidebar.file_uploader(
-    "Upload one or more Pingr JSONL logs", type=None, accept_multiple_files=True,
-    help="Upload multiple dated logs together to compare patterns across them."
-)
-st.sidebar.caption("For now, historical comparisons use the files uploaded together. Permanent storage is a later step.")
+
+class ArchiveUpload(BytesIO):
+    def __init__(self, name, content):
+        super().__init__(content)
+        self.name = name
+
+OWNER = "rajnet70"
+REPO = "Binance-discord-alert"
+ARCHIVE_BRANCH = "pingr-log-archive"
+API = "https://api.github.com"
+
+def gh_headers(token):
+    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Pingr-Analytics-Dashboard"}
+
+@st.cache_data(ttl=90, show_spinner=False)
+def archive_head(token):
+    url = f"{API}/repos/{OWNER}/{REPO}/branches/{ARCHIVE_BRANCH}"
+    r = requests.get(url, headers=gh_headers(token), timeout=25)
+    r.raise_for_status()
+    p = r.json()
+    return p["commit"]["sha"], p["commit"]["commit"]["committer"]["date"]
+
+@st.cache_data(ttl=120, show_spinner=False)
+def archive_tree(commit_sha, token):
+    url = f"{API}/repos/{OWNER}/{REPO}/git/trees/{commit_sha}?recursive=1"
+    r = requests.get(url, headers=gh_headers(token), timeout=30)
+    r.raise_for_status()
+    logs, manifests = [], []
+    for item in r.json().get("tree", []):
+        path = item.get("path", "")
+        if item.get("type") != "blob":
+            continue
+        if path.startswith("pingr-archive__") and (path.endswith(".pending") or ".part-" in path):
+            logs.append({"path": path, "sha": item["sha"]})
+        elif path.startswith("pingr-archive__") and path.endswith(".pending.sync.json"):
+            manifests.append({"path": path, "sha": item["sha"]})
+        elif path == "alert_log-1311.jsonl":
+            logs.append({"path": path, "sha": item["sha"]})
+    return sorted(logs, key=lambda x:x["path"]), sorted(manifests, key=lambda x:x["path"])
+
+@st.cache_data(ttl=3600, max_entries=1000, show_spinner=False)
+def archive_blob(blob_sha, token):
+    url = f"{API}/repos/{OWNER}/{REPO}/git/blobs/{blob_sha}"
+    r = requests.get(url, headers=gh_headers(token), timeout=30)
+    r.raise_for_status()
+    p = r.json()
+    return base64.b64decode(p["content"]).decode("utf-8-sig", errors="replace")
+
+def load_archive(token):
+    head, updated = archive_head(token)
+    logs, manifests = archive_tree(head, token)
+    loaded, errors = [], []
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        jobs = {pool.submit(archive_blob, item["sha"], token): item for item in logs}
+        for job in as_completed(jobs):
+            item = jobs[job]
+            try:
+                content = job.result()
+                if content.strip():
+                    loaded.append((item["path"], content.encode("utf-8")))
+            except Exception as exc:
+                errors.append(f'{item["path"]}: {type(exc).__name__}: {exc}')
+    loaded.sort(key=lambda x:x[0])
+    last_sync = None
+    if manifests:
+        try:
+            last_sync = json.loads(archive_blob(manifests[-1]["sha"], token)).get("syncedAt")
+        except Exception as exc:
+            errors.append(f"Latest manifest: {type(exc).__name__}: {exc}")
+    return loaded, {"head":head, "updated":updated, "files":len(logs),
+                    "loaded":len(loaded), "errors":errors, "last_sync":last_sync}
+
+st.sidebar.header("Live GitHub archive")
+st.sidebar.caption("Private source: rajnet70/Binance-discord-alert · branch: pingr-log-archive")
+if st.sidebar.button("Refresh archive now", use_container_width=True):
+    st.cache_data.clear()
+try:
+    token = st.secrets.get("GITHUB_TOKEN", "")
+except Exception:
+    token = ""
+token = token or os.getenv("GITHUB_TOKEN", "")
+if not token:
+    st.error("GitHub access is not configured. Add GITHUB_TOKEN to the Streamlit app Secrets.")
+    st.stop()
+try:
+    with st.spinner("Reading Pingr archive from GitHub…"):
+        archive_files, archive_status = load_archive(token)
+except Exception as exc:
+    st.error(f"Could not read the private archive: {type(exc).__name__}: {exc}")
+    st.stop()
+uploads = [ArchiveUpload(name, content) for name, content in archive_files]
+st.sidebar.metric("Archive files loaded", f'{archive_status["loaded"]:,}')
+st.sidebar.caption(f'Archive branch updated: {archive_status["updated"]}')
+st.sidebar.caption(f'Last successful sync: {archive_status["last_sync"] or "Not available"}')
+if archive_status["errors"]:
+    st.sidebar.warning(f'{len(archive_status["errors"])} archive file(s) could not be read.')
+else:
+    st.sidebar.success("Archive read completed without file errors.")
+st.sidebar.caption("Branch discovery: 90 seconds. Tree refresh: 120 seconds. Unchanged blobs are cached by SHA.")
 
 
 def parse_files(files):
@@ -109,7 +211,7 @@ def prepare(rows):
         df["event_type"] = "unknown"
     alerts = df[df.event_type.eq("alert_record")].copy()
     outcomes = df[df.event_type.eq("alert_outcome")].copy()
-    generic = df[df.event_type.eq("generic")].copy()
+    generic = df[~df.event_type.isin(["alert_record", "alert_outcome"])].copy()
     for c in ["final_percent", "peak_percent", "worst_percent", "signal_score", "rsi_14", "rsi_6", "atr_pct", "vol_ratio", "btc_1h", "btc_4h", "pullback", "run24", "dist_ma20", "mfe_percent", "mae_percent", "pnl_percent", "volume_spike_5m", "volume_spike_15m"]:
         if c in alerts.columns:
             alerts[c] = pd.to_numeric(alerts[c], errors="coerce")
@@ -320,8 +422,7 @@ def synopsis_observations(alerts, generic):
 
 
 if not uploads:
-    st.info("Upload one or more Pingr JSONL logs to generate a synopsis and compare patterns.")
-    st.markdown("**Designed for quick decisions:** latest-log synopsis, detector health, recurring patterns and optional diagnostics.")
+    st.warning("No readable JSONL log files were found on the archive branch yet.")
     st.stop()
 
 per_file, combined_rows, errors, duplicate_count = parse_files(uploads)
@@ -331,6 +432,103 @@ if not combined_rows:
 
 combined, alerts, outcomes, generic = prepare(combined_rows)
 valid = alerts.dropna(subset=["final_percent"]).copy() if not alerts.empty and "final_percent" in alerts else pd.DataFrame()
+
+# Live archive status and requested coin/liquidity views.
+st.markdown('<div class="pingr-eyebrow">00 / Archive health</div>', unsafe_allow_html=True)
+st.header("Live archive health")
+event_counts = combined.get("event_type", pd.Series("unknown", index=combined.index)).fillna("unknown").value_counts()
+metric_row([
+    ("Unique records", f"{len(combined):,}"),
+    ("Files read", f'{archive_status["loaded"]:,}'),
+    ("Duplicate rows skipped", f"{duplicate_count:,}"),
+    ("Read / parse errors", f"{len(archive_status['errors']) + len(errors):,}")
+])
+st.caption(f'Archive branch commit: {archive_status["head"][:12]} · Branch updated: {archive_status["updated"]} · Last manifest sync: {archive_status["last_sync"] or "not available"}')
+with st.expander("Archived event inventory"):
+    st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
+if archive_status["errors"]:
+    with st.expander("Archive file read errors"):
+        st.write(archive_status["errors"])
+
+st.markdown('<div class="pingr-eyebrow">00 / Coin performance</div>', unsafe_allow_html=True)
+st.header("Best and worst performing coins")
+coin_data = pd.DataFrame()
+coin_return = None
+if not alerts.empty and {"symbol", "final_percent"}.issubset(alerts.columns):
+    coin_data, coin_return = alerts.copy(), "final_percent"
+elif not outcomes.empty and {"symbol", "pnl_percent"}.issubset(outcomes.columns):
+    coin_data, coin_return = latest_outcomes(outcomes).copy(), "pnl_percent"
+if not coin_data.empty and coin_return:
+    coin_data[coin_return] = pd.to_numeric(coin_data[coin_return], errors="coerce")
+    coin_data = coin_data.dropna(subset=["symbol", coin_return])
+    ranked = coin_data.groupby("symbol").agg(
+        observations=(coin_return, "size"),
+        average_return=(coin_return, "mean"),
+        median_return=(coin_return, "median"),
+        winning_records=(coin_return, lambda values: int((values > 0).sum()))
+    ).reset_index()
+    ranked["win_rate"] = ranked["winning_records"] / ranked["observations"] * 100
+    ranked = ranked[ranked["observations"] >= 2]
+    if not ranked.empty:
+        left, right = st.columns(2)
+        with left:
+            st.subheader("Top performers")
+            st.dataframe(ranked.sort_values("average_return", ascending=False).head(10).round(2), use_container_width=True, hide_index=True)
+        with right:
+            st.subheader("Worst performers")
+            st.dataframe(ranked.sort_values("average_return", ascending=True).head(10).round(2), use_container_width=True, hide_index=True)
+        st.caption("Closed-alert returns only; at least two observations per coin. Scanner skips are never counted as trades.")
+    else:
+        st.info("Closed-alert records exist, but no coin has at least two return observations yet.")
+else:
+    st.info("No archived closed-alert records with per-coin final returns or outcome PnL are available yet. Rankings will populate when those records reach the archive.")
+
+st.markdown('<div class="pingr-eyebrow">00 / Liquidity-only exclusions</div>', unsafe_allow_html=True)
+st.header("Liquidity-only missed-opportunity analysis")
+required_liq = {"event_type", "diagnostic.reason", "diagnostic.stage"}
+if required_liq.issubset(combined.columns):
+    liq = combined[
+        combined["event_type"].eq("scanner_gate_rejection")
+        & combined["diagnostic.stage"].eq("24h_liquidity")
+        & combined["diagnostic.reason"].eq("low_24h_volume")
+    ].copy()
+else:
+    liq = pd.DataFrame()
+if not liq.empty:
+    volume_col = "diagnostic.details.volume_24h_quote"
+    if volume_col in liq.columns:
+        liq[volume_col] = pd.to_numeric(liq[volume_col], errors="coerce")
+        liq = liq.dropna(subset=[volume_col])
+        metric_row([
+            ("Liquidity-only rejection records", f"{len(liq):,}"),
+            ("Distinct rejected coins", f'{liq["symbol"].nunique() if "symbol" in liq else 0:,}')
+        ])
+        st.dataframe(
+            liq[[c for c in ["timestamp", "symbol", volume_col] if c in liq.columns]].rename(
+                columns={volume_col: "24h quote volume (USDT)"}
+            ),
+            use_container_width=True, hide_index=True
+        )
+        st.subheader("Captured rejected coins under alternative thresholds")
+        rows = []
+        for threshold in [20_000_000, 15_000_000, 10_000_000]:
+            eligible = liq[liq[volume_col] >= threshold]
+            rows.append({
+                "Hypothetical minimum": f"${threshold / 1_000_000:.0f}M",
+                "Distinct coins that would pass": int(eligible["symbol"].nunique()) if "symbol" in eligible else 0,
+                "Captured rejection records that would pass": len(eligible)
+            })
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        refresh = combined[combined["event_type"].eq("liquidity_universe_refresh")] if "event_type" in combined else pd.DataFrame()
+        recorded = pd.to_numeric(refresh.get("diagnostic.threshold_usdt", pd.Series(dtype="float64")), errors="coerce").dropna().unique()
+        if len(recorded):
+            st.caption("Recorded configured threshold(s): " + ", ".join(f"${v/1_000_000:.0f}M" for v in sorted(recorded)))
+        st.caption("Strictly filtered to low_24h_volume rejections at the 24h_liquidity gate. Alternative-threshold counts are not evidence that a rejected coin would have produced a profitable trade.")
+    else:
+        st.warning("Liquidity-only rejection records exist, but quote-volume values are missing.")
+else:
+    st.info("No liquidity-only rejections were found in the loaded archive. Other rejection reasons are intentionally excluded.")
+
 
 # Main glance view
 st.markdown('<div class="pingr-eyebrow">01 / Performance overview</div>', unsafe_allow_html=True)
