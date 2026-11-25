@@ -473,6 +473,30 @@ if not alerts.empty and "timestamp" in alerts.columns:
 if not outcomes.empty and "timestamp" in outcomes.columns:
     outcomes["_ts"] = pd.to_datetime(outcomes["timestamp"], errors="coerce", utc=True)
 
+# Display only the latest six-hour data window, anchored to the newest event
+# actually present in the archive (not the GitHub upload/sync timestamp).
+latest_event_ts = combined["_ts"].max()
+if pd.isna(latest_event_ts):
+    st.error("The archive contains no parseable event timestamps; cannot determine the latest six-hour session.")
+    st.stop()
+session_end = latest_event_ts
+session_start = session_end - pd.Timedelta(hours=6)
+session_mask = combined["_ts"].between(session_start, session_end, inclusive="both")
+session_frame = combined.loc[session_mask].drop(columns=["_ts"], errors="ignore")
+combined, alerts, outcomes, generic = prepare(session_frame.to_dict("records"))
+if not combined.empty and "timestamp" in combined.columns:
+    combined["_ts"] = pd.to_datetime(combined["timestamp"], errors="coerce", utc=True)
+else:
+    combined["_ts"] = pd.NaT
+if not alerts.empty and "timestamp" in alerts.columns:
+    alerts["_ts"] = pd.to_datetime(alerts["timestamp"], errors="coerce", utc=True)
+if not outcomes.empty and "timestamp" in outcomes.columns:
+    outcomes["_ts"] = pd.to_datetime(outcomes["timestamp"], errors="coerce", utc=True)
+session_start_pak = session_start.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M %p PKT")
+session_end_pak = session_end.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M %p PKT")
+session_age_hours = (pd.Timestamp.now(tz="UTC") - session_end).total_seconds() / 3600
+session_source_files = session_frame["_source_file"].nunique() if "_source_file" in session_frame else 0
+
 # Latest archive file is determined from the timestamp embedded in its archive name.
 latest_name = max(per_file.keys(), default=None)
 latest_rows = per_file.get(latest_name, []) if latest_name else []
@@ -486,7 +510,7 @@ latest_time_pak = latest_time.tz_convert("Asia/Karachi").strftime("%d %b %Y · %
 
 st.markdown('<div class="pingr-eyebrow">PINGR · LIVE INTELLIGENCE</div>', unsafe_allow_html=True)
 st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
-st.markdown('<div class="pingr-subtitle">Decision-focused performance · Detector results · Coin intelligence · Latest archive activity</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-subtitle">Latest six-hour session · Detector results · Coin intelligence · Recent activity</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
 # Keep the archive controls compact and out of the main analysis.
 st.sidebar.header("Data connection")
@@ -598,47 +622,41 @@ if not latest_eval.empty:
 else:
     st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
 
-# 5. Latest archive log — explicit latest file metadata and useful activity, not raw telemetry.
-st.header("Latest log file")
-if latest_name:
-    st.markdown(f"**Newest file currently present in GitHub archive:** {latest_name}")
-    if pd.notna(latest_time):
-        archive_age_hours = (pd.Timestamp.now(tz="UTC") - latest_time).total_seconds() / 3600
-        if archive_age_hours > 12:
-            st.error(f"ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
-        else:
-            st.success(f"Archive freshness: newest event is {archive_age_hours:.1f} hours old.")
-    file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
-    file_records = len(latest_rows)
-    metric_row([
-        ("Records in latest file", f"{file_records:,}"),
-        ("Distinct symbols", f'{latest_df["symbol"].nunique() if "symbol" in latest_df else 0:,}'),
-        ("Latest event time", latest_time_pak),
-        ("File size", f'{next((x["size"] for x in github_archive_index() if x["name"] == "pingr-archive__" + latest_name), 0) / 1024:.1f} KB'),
-    ])
-    if not file_event_counts.empty:
-        st.caption("Event mix: " + " · ".join(f"{k}: {v:,}" for k, v in file_event_counts.head(6).items()))
-    if "diagnostic.reason" in latest_df:
-        reasons = latest_df["diagnostic.reason"].dropna().astype(str).value_counts().head(5)
-        if not reasons.empty:
-            st.caption("Most common gate/skip reasons: " + " · ".join(f"{k} ({v})" for k, v in reasons.items()))
-    if not latest_df.empty and "_ts" in latest_df:
-        latest_activity = latest_df.sort_values("_ts", ascending=False, na_position="last")
-        useful = latest_activity[
-            ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
-                ["volume_cache_snapshot", "signal_quality_snapshot"]
-            )
-        ].head(12)
-        cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in useful]
-        if not useful.empty and cols:
-            st.dataframe(useful[cols], use_container_width=True, hide_index=True)
-        else:
-            st.info("The newest file contains telemetry snapshots but no alert/rejection events to display.")
+# 5. Latest six-hour session — all analytics above are scoped to this window.
+st.header("Latest session · last 6 hours of available Pingr data")
+st.caption(f"Session window: {session_start_pak} → {session_end_pak} · anchored to the newest actual event timestamp, not archive sync time.")
+if session_age_hours > 12:
+    st.error(f"ARCHIVE DATA IS STALE · Newest event is {session_age_hours:.1f} hours old. This shows the latest available data, not proof of current Pingr activity.")
 else:
-    st.info("No archive log file is available.")
+    st.success(f"Newest available event is {session_age_hours:.1f} hours old.")
+metric_row([
+    ("Events in 6-hour window", f"{len(combined):,}"),
+    ("Unique symbols", f'{combined["symbol"].nunique() if "symbol" in combined else 0:,}'),
+    ("Source files contributing", f"{session_source_files:,}"),
+    ("Actual alert records", f'{len(alerts):,}'),
+])
+session_event_counts = combined.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
+if not session_event_counts.empty:
+    st.caption("Session event mix: " + " · ".join(f"{k}: {v:,}" for k, v in session_event_counts.items()))
+
+st.subheader("Latest activity · 50 most recent events")
+if not combined.empty and "_ts" in combined:
+    latest_activity = combined.sort_values("_ts", ascending=False, na_position="last").head(50).copy()
+    useful = latest_activity[
+        ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
+            ["volume_cache_snapshot", "signal_quality_snapshot"]
+        )
+    ]
+    cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in latest_activity]
+    if cols:
+        st.dataframe(latest_activity[cols], use_container_width=True, hide_index=True)
+    else:
+        st.info("The latest session has records, but none of the standard activity fields are present.")
+else:
+    st.info("No timestamped activity is available in the latest session.")
 
 # Recent actual alerts, capped to 20 rows.
-st.header("Recent alerts")
+st.header("Recent alerts · latest session")
 if not alerts.empty:
     recent = alerts.sort_values("_ts", ascending=False, na_position="last").head(20).copy()
     cols = [c for c in ["timestamp", "symbol", "detector", "alert_type", "signal_score", "final_percent", "peak_percent", "worst_percent", "exit_reason"] if c in recent]
