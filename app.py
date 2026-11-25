@@ -76,14 +76,28 @@ def github_headers():
 
 @st.cache_data(ttl=60, show_spinner=False)
 def github_archive_index():
-    response = requests.get(
-        f"{GITHUB_API}/contents",
-        params={"ref": GITHUB_BRANCH, "per_page": 1000},
-        headers=github_headers(),
-        timeout=30
-    )
-    response.raise_for_status()
-    entries = response.json()
+    # GitHub REST API caps per_page at 100; paginate to avoid silently
+    # missing older archive files in repositories with more than 100 entries.
+    headers = github_headers()
+    entries = []
+    page = 1
+    while True:
+        response = requests.get(
+            f"{GITHUB_API}/contents",
+            params={"ref": GITHUB_BRANCH, "per_page": 100, "page": page},
+            headers=headers,
+            timeout=30
+        )
+        response.raise_for_status()
+        batch = response.json()
+        if not isinstance(batch, list):
+            raise RuntimeError(f"Unexpected GitHub archive index response: {batch}")
+        entries.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
+        if page > 20:
+            raise RuntimeError("GitHub archive index exceeded the 2,000-entry safety limit.")
     return [
         {"name": item["name"], "path": item["path"], "sha": item["sha"], "size": item.get("size", 0)}
         for item in entries
@@ -451,7 +465,7 @@ metric_row([
     ("Duplicate rows skipped", f"{duplicate_count:,}"),
     ("Read / parse errors", f"{len(archive_status['errors']) + len(errors):,}")
 ])
-st.caption(f'Archive branch commit: {archive_status["head"][:12]} · Branch updated: {archive_status["updated"]} · Last manifest sync: {archive_status["last_sync"] or "not available"}')
+st.caption(f'Archive source: GitHub branch {GITHUB_BRANCH} · Latest archive file: {archive_status["updated"]} · Last manifest sync: {archive_status["last_sync"] or "not available"}')
 with st.expander("Archived event inventory"):
     st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
 if archive_status["errors"]:
