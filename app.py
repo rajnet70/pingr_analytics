@@ -159,7 +159,7 @@ def load_archive():
 
 st.sidebar.header("Live GitHub archive")
 st.sidebar.caption("Source: rajnet70/Binance-discord-alert · branch: pingr-log-archive")
-if st.sidebar.button("Refresh archive now", width="stretch"):
+if st.sidebar.button("Refresh archive now", use_container_width=True):
     st.cache_data.clear()
 try:
     with st.spinner("Reading Pingr logs from the private GitHub archive…"):
@@ -273,10 +273,7 @@ def detector_summary(alerts):
         avg_peak=("peak_percent", "mean") if "peak_percent" in a.columns else ("final_percent", "mean"),
     ).reset_index()
     decisive = out.wins + out.losses
-    # Avoid Series.replace(0, pd.NA), which can trigger pandas nullable-dtype
-    # recursion errors on some deployed pandas versions.
-    decisive_denominator = decisive.where(decisive.ne(0))
-    out["win_rate"] = (out.wins / decisive_denominator * 100).fillna(0)
+    out["win_rate"] = (out.wins / decisive.replace(0, pd.NA) * 100).fillna(0)
     return out
 
 
@@ -341,7 +338,7 @@ def render_outcome_intelligence(outcomes):
                          "Losses": stats["losses"], "Neutral": stats["neutral"],
                          "Win rate · decisive": stats["decisive_rate"]})
         volume_table = pd.DataFrame(rows)
-        st.dataframe(volume_table.style.format({"Win rate · decisive": "{:.1f}%"}), width="stretch", hide_index=True)
+        st.dataframe(volume_table.style.format({"Win rate · decisive": "{:.1f}%"}), use_container_width=True, hide_index=True)
         high = latest[latest.original_volume_5m >= 5]
         low = latest[latest.original_volume_5m.notna() & (latest.original_volume_5m < 5)]
         hs, ls = outcome_counts(high), outcome_counts(low)
@@ -365,7 +362,7 @@ def render_outcome_intelligence(outcomes):
                 z=outcome_counts(g)
                 rs.append({"RSI band":label,"Alerts":z["alerts"],"Wins":z["wins"],"Losses":z["losses"],
                            "Neutral":z["neutral"],"Decisive win %":z["decisive_rate"]})
-            st.dataframe(pd.DataFrame(rs).style.format({"Decisive win %":"{:.1f}"}),width="stretch",hide_index=True)
+            st.dataframe(pd.DataFrame(rs).style.format({"Decisive win %":"{:.1f}"}),use_container_width=True,hide_index=True)
         else:
             st.caption("RSI 15m is not present in this outcome stream.")
     with right:
@@ -380,7 +377,7 @@ def render_outcome_intelligence(outcomes):
                 macd_rows.append({"TF":label,"State":group_label,"Alerts":z["alerts"],"W/L/N":f"{z['wins']}/{z['losses']}/{z['neutral']}",
                                   "Decisive win %":z["decisive_rate"]})
         if macd_rows:
-            st.dataframe(pd.DataFrame(macd_rows).style.format({"Decisive win %":"{:.1f}"}),width="stretch",hide_index=True)
+            st.dataframe(pd.DataFrame(macd_rows).style.format({"Decisive win %":"{:.1f}"}),use_container_width=True,hide_index=True)
         else:
             st.caption("MACD fields are not present in this outcome stream.")
 
@@ -394,7 +391,7 @@ def render_outcome_intelligence(outcomes):
             z=outcome_counts(g)
             score_rows.append({"Score":label,"Alerts":z["alerts"],"Wins":z["wins"],"Losses":z["losses"],
                                "Neutral":z["neutral"],"Decisive win %":z["decisive_rate"]})
-        st.dataframe(pd.DataFrame(score_rows).style.format({"Decisive win %":"{:.1f}"}),width="stretch",hide_index=True)
+        st.dataframe(pd.DataFrame(score_rows).style.format({"Decisive win %":"{:.1f}"}),use_container_width=True,hide_index=True)
         st.caption("Score bands are descriptive. Small samples and overlapping signal conditions prevent causal conclusions.")
 
     st.subheader("Price movement and outcome")
@@ -408,7 +405,7 @@ def render_outcome_intelligence(outcomes):
             for field in available:
                 row[field.replace("original_","").replace("_"," ")] = pd.to_numeric(g[field],errors="coerce").median()
             summary.append(row)
-        st.dataframe(pd.DataFrame(summary).round(3),width="stretch",hide_index=True)
+        st.dataframe(pd.DataFrame(summary).round(3),use_container_width=True,hide_index=True)
     st.caption("All comparisons use the latest logged evaluation per alert ID. They describe this sample and do not establish future predictive performance.")
 
 
@@ -476,28 +473,6 @@ if not alerts.empty and "timestamp" in alerts.columns:
 if not outcomes.empty and "timestamp" in outcomes.columns:
     outcomes["_ts"] = pd.to_datetime(outcomes["timestamp"], errors="coerce", utc=True)
 
-# Display only the latest six-hour data window, anchored to the newest event
-# actually present in the archive (not the GitHub upload/sync timestamp).
-latest_event_ts = combined["_ts"].max()
-if pd.isna(latest_event_ts):
-    st.error("The archive contains no parseable event timestamps; cannot determine the latest six-hour session.")
-    st.stop()
-session_end = latest_event_ts
-session_start = session_end - pd.Timedelta(hours=6)
-session_mask = combined["_ts"].between(session_start, session_end)
-session_frame = combined.loc[session_mask].copy()
-combined = session_frame.copy()
-# Filter the already-prepared event streams directly. Avoid re-normalizing JSON
-# records, which can change pandas dtypes and trigger runtime errors.
-alerts = alerts.loc[alerts["_ts"].between(session_start, session_end)].copy() if not alerts.empty and "_ts" in alerts else alerts.iloc[0:0].copy()
-outcomes = outcomes.loc[outcomes["_ts"].between(session_start, session_end)].copy() if not outcomes.empty and "_ts" in outcomes else outcomes.iloc[0:0].copy()
-generic = generic.loc[generic["timestamp"].map(lambda value: pd.to_datetime(value, errors="coerce", utc=True)).between(session_start, session_end)].copy() if not generic.empty and "timestamp" in generic else generic.iloc[0:0].copy()
-valid = alerts.dropna(subset=["final_percent"]).copy() if not alerts.empty and "final_percent" in alerts else pd.DataFrame()
-session_start_pak = session_start.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M %p PKT")
-session_end_pak = session_end.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M %p PKT")
-session_age_hours = (pd.Timestamp.now(tz="UTC") - session_end).total_seconds() / 3600
-session_source_files = session_frame["_source_file"].nunique() if "_source_file" in session_frame else 0
-
 # Latest archive file is determined from the timestamp embedded in its archive name.
 latest_name = max(per_file.keys(), default=None)
 latest_rows = per_file.get(latest_name, []) if latest_name else []
@@ -511,14 +486,14 @@ latest_time_pak = latest_time.tz_convert("Asia/Karachi").strftime("%d %b %Y · %
 
 st.markdown('<div class="pingr-eyebrow">PINGR · LIVE INTELLIGENCE</div>', unsafe_allow_html=True)
 st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
-st.markdown('<div class="pingr-subtitle">Latest six-hour session · Detector results · Coin intelligence · Recent activity</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-subtitle">Decision-focused performance · Detector results · Coin intelligence · Latest archive activity</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
 # Keep the archive controls compact and out of the main analysis.
 st.sidebar.header("Data connection")
 st.sidebar.caption("Private GitHub archive · pingr-log-archive")
 st.sidebar.metric("Log files loaded", f'{archive_status["loaded"]:,}')
 st.sidebar.caption(f'Newest file in archive: {archive_status["updated"]}')
-if st.sidebar.button("Refresh latest data", width="stretch"):
+if st.sidebar.button("Refresh latest data", use_container_width=True):
     st.cache_data.clear()
     st.rerun()
 if archive_status["errors"]:
@@ -554,7 +529,7 @@ if not perf_all.empty:
     show["avg_return"] = show["avg_return"].map(lambda x: f"{x:+.2f}%")
     show["median_return"] = show["median_return"].map(lambda x: f"{x:+.2f}%")
     show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
-    st.dataframe(show, width="stretch", hide_index=True)
+    st.dataframe(show, use_container_width=True, hide_index=True)
     chart = perf_all.sort_values("avg_return", ascending=True)
     fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
                  text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
@@ -565,7 +540,7 @@ if not perf_all.empty:
                       plot_bgcolor="rgba(0,0,0,0)", coloraxis_showscale=False,
                       font=dict(color="#edf5ff"))
     fig.update_traces(textposition="outside", cliponaxis=False)
-    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
+    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 else:
     st.info("No closed tracked-alert returns are available yet. Scanner skips and diagnostics are excluded from detector performance.")
 
@@ -588,11 +563,11 @@ if not coin_source.empty:
         with left:
             st.subheader("Strongest coins")
             st.dataframe(coin_rank.sort_values("avg_return", ascending=False).head(8).round(2),
-                         width="stretch", hide_index=True)
+                         use_container_width=True, hide_index=True)
         with right:
             st.subheader("Weakest coins")
             st.dataframe(coin_rank.sort_values("avg_return", ascending=True).head(8).round(2),
-                         width="stretch", hide_index=True)
+                         use_container_width=True, hide_index=True)
         st.caption("Closed tracked alerts only · minimum two observations per coin.")
     else:
         st.info("Not enough closed-alert observations per coin to rank reliably.")
@@ -618,51 +593,57 @@ if not latest_eval.empty:
     if quality_cols:
         st.dataframe(latest_eval[["symbol", "result"] + quality_cols].sort_values(
             "pnl_percent", ascending=False) if "pnl_percent" in quality_cols and "symbol" in latest_eval else latest_eval[["result"] + quality_cols],
-            width="stretch", hide_index=True)
+            use_container_width=True, hide_index=True)
     st.caption("Latest evaluation per alert ID. Outcome records are analyzed separately and are not merged with detector alert records.")
 else:
     st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
 
-# 5. Latest six-hour session — all analytics above are scoped to this window.
-st.header("Latest session · last 6 hours of available Pingr data")
-st.caption(f"Session window: {session_start_pak} → {session_end_pak} · anchored to the newest actual event timestamp, not archive sync time.")
-if session_age_hours > 12:
-    st.error(f"ARCHIVE DATA IS STALE · Newest event is {session_age_hours:.1f} hours old. This shows the latest available data, not proof of current Pingr activity.")
+# 5. Latest archive log — explicit latest file metadata and useful activity, not raw telemetry.
+st.header("Latest log file")
+if latest_name:
+    st.markdown(f"**Newest file currently present in GitHub archive:** {latest_name}")
+    if pd.notna(latest_time):
+        archive_age_hours = (pd.Timestamp.now(tz="UTC") - latest_time).total_seconds() / 3600
+        if archive_age_hours > 12:
+            st.error(f"ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
+        else:
+            st.success(f"Archive freshness: newest event is {archive_age_hours:.1f} hours old.")
+    file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
+    file_records = len(latest_rows)
+    metric_row([
+        ("Records in latest file", f"{file_records:,}"),
+        ("Distinct symbols", f'{latest_df["symbol"].nunique() if "symbol" in latest_df else 0:,}'),
+        ("Latest event time", latest_time_pak),
+        ("File size", f'{next((x["size"] for x in github_archive_index() if x["name"] == "pingr-archive__" + latest_name), 0) / 1024:.1f} KB'),
+    ])
+    if not file_event_counts.empty:
+        st.caption("Event mix: " + " · ".join(f"{k}: {v:,}" for k, v in file_event_counts.head(6).items()))
+    if "diagnostic.reason" in latest_df:
+        reasons = latest_df["diagnostic.reason"].dropna().astype(str).value_counts().head(5)
+        if not reasons.empty:
+            st.caption("Most common gate/skip reasons: " + " · ".join(f"{k} ({v})" for k, v in reasons.items()))
+    if not latest_df.empty and "_ts" in latest_df:
+        latest_activity = latest_df.sort_values("_ts", ascending=False, na_position="last")
+        useful = latest_activity[
+            ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
+                ["volume_cache_snapshot", "signal_quality_snapshot"]
+            )
+        ].head(12)
+        cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in useful]
+        if not useful.empty and cols:
+            st.dataframe(useful[cols], use_container_width=True, hide_index=True)
+        else:
+            st.info("The newest file contains telemetry snapshots but no alert/rejection events to display.")
 else:
-    st.success(f"Newest available event is {session_age_hours:.1f} hours old.")
-metric_row([
-    ("Events in 6-hour window", f"{len(combined):,}"),
-    ("Unique symbols", f'{combined["symbol"].nunique() if "symbol" in combined else 0:,}'),
-    ("Source files contributing", f"{session_source_files:,}"),
-    ("Actual alert records", f'{len(alerts):,}'),
-])
-session_event_counts = combined.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
-if not session_event_counts.empty:
-    st.caption("Session event mix: " + " · ".join(f"{k}: {v:,}" for k, v in session_event_counts.items()))
-
-st.subheader("Latest activity · 50 most recent events")
-if not combined.empty and "_ts" in combined:
-    latest_activity = combined.sort_values("_ts", ascending=False, na_position="last").head(50).copy()
-    useful = latest_activity[
-        ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
-            ["volume_cache_snapshot", "signal_quality_snapshot"]
-        )
-    ]
-    cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in latest_activity]
-    if cols:
-        st.dataframe(latest_activity[cols], width="stretch", hide_index=True)
-    else:
-        st.info("The latest session has records, but none of the standard activity fields are present.")
-else:
-    st.info("No timestamped activity is available in the latest session.")
+    st.info("No archive log file is available.")
 
 # Recent actual alerts, capped to 20 rows.
-st.header("Recent alerts · latest session")
+st.header("Recent alerts")
 if not alerts.empty:
     recent = alerts.sort_values("_ts", ascending=False, na_position="last").head(20).copy()
     cols = [c for c in ["timestamp", "symbol", "detector", "alert_type", "signal_score", "final_percent", "peak_percent", "worst_percent", "exit_reason"] if c in recent]
     if cols:
-        st.dataframe(recent[cols], width="stretch", hide_index=True)
+        st.dataframe(recent[cols], use_container_width=True, hide_index=True)
     else:
         st.info("Alert records exist, but do not contain the expected display fields.")
 else:
@@ -673,9 +654,9 @@ with st.expander("Advanced diagnostics · raw data and exports"):
     st.caption("Open only when investigating a specific issue. This section is intentionally hidden by default.")
     st.write(f"Archive files loaded: {archive_status['loaded']:,} · Read errors: {len(archive_status['errors']):,} · Parse errors: {len(errors):,}")
     if errors:
-        st.dataframe(pd.DataFrame(errors).head(100), width="stretch", hide_index=True)
+        st.dataframe(pd.DataFrame(errors).head(100), use_container_width=True, hide_index=True)
     event_counts = combined.get("event_type", pd.Series("unknown", index=combined.index)).fillna("unknown").value_counts()
-    st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), width="stretch", hide_index=True)
+    st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
     csv_data = combined.drop(columns=["_ts"], errors="ignore").to_csv(index=False).encode("utf-8")
     st.download_button("Download all parsed records (CSV)", csv_data, "pingr_parsed_records.csv", "text/csv")
     jsonl_out = "\\n".join(json.dumps(r, default=str) for r in combined_rows)
