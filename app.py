@@ -76,34 +76,41 @@ def github_headers():
 
 @st.cache_data(ttl=60, show_spinner=False)
 def github_archive_index():
-    # GitHub REST API caps per_page at 100; paginate to avoid silently
-    # missing older archive files in repositories with more than 100 entries.
+    # Use the branch's recursive Git tree instead of Contents directory listing.
+    # The Contents endpoint does not provide reliable page traversal for this use.
     headers = github_headers()
-    entries = []
-    page = 1
-    while True:
-        response = requests.get(
-            f"{GITHUB_API}/contents",
-            params={"ref": GITHUB_BRANCH, "per_page": 100, "page": page},
-            headers=headers,
-            timeout=30
-        )
-        response.raise_for_status()
-        batch = response.json()
-        if not isinstance(batch, list):
-            raise RuntimeError(f"Unexpected GitHub archive index response: {batch}")
-        entries.extend(batch)
-        if len(batch) < 100:
-            break
-        page += 1
-        if page > 20:
-            raise RuntimeError("GitHub archive index exceeded the 2,000-entry safety limit.")
+    branch_response = requests.get(
+        f"{GITHUB_API}/branches/{GITHUB_BRANCH}",
+        headers=headers,
+        timeout=30
+    )
+    branch_response.raise_for_status()
+    branch_data = branch_response.json()
+    tree_sha = branch_data["commit"]["commit"]["tree"]["sha"]
+
+    tree_response = requests.get(
+        f"{GITHUB_API}/git/trees/{tree_sha}",
+        params={"recursive": "1"},
+        headers=headers,
+        timeout=60
+    )
+    tree_response.raise_for_status()
+    tree_data = tree_response.json()
+    if tree_data.get("truncated"):
+        raise RuntimeError("GitHub returned a truncated archive tree; refusing to load an incomplete archive.")
+
     return [
-        {"name": item["name"], "path": item["path"], "sha": item["sha"], "size": item.get("size", 0)}
-        for item in entries
-        if item.get("type") == "file"
-        and item.get("name", "").startswith("pingr-archive__")
-        and not item.get("name", "").endswith(".sync.json")
+        {
+            "name": item["path"].rsplit("/", 1)[-1],
+            "path": item["path"],
+            "sha": item["sha"],
+            "size": item.get("size", 0)
+        }
+        for item in tree_data.get("tree", [])
+        if item.get("type") == "blob"
+        and "/" not in item.get("path", "")
+        and item.get("path", "").startswith("pingr-archive__")
+        and not item.get("path", "").endswith(".sync.json")
     ]
 
 @st.cache_data(ttl=3600, max_entries=1000, show_spinner=False)
