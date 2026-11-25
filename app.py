@@ -492,6 +492,7 @@ if not alerts.empty and "timestamp" in alerts.columns:
     alerts["_ts"] = pd.to_datetime(alerts["timestamp"], errors="coerce", utc=True)
 if not outcomes.empty and "timestamp" in outcomes.columns:
     outcomes["_ts"] = pd.to_datetime(outcomes["timestamp"], errors="coerce", utc=True)
+valid = alerts.dropna(subset=["final_percent"]).copy() if not alerts.empty and "final_percent" in alerts else pd.DataFrame()
 session_start_pak = session_start.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M %p PKT")
 session_end_pak = session_end.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M %p PKT")
 session_age_hours = (pd.Timestamp.now(tz="UTC") - session_end).total_seconds() / 3600
