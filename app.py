@@ -273,7 +273,10 @@ def detector_summary(alerts):
         avg_peak=("peak_percent", "mean") if "peak_percent" in a.columns else ("final_percent", "mean"),
     ).reset_index()
     decisive = out.wins + out.losses
-    out["win_rate"] = (out.wins / decisive.replace(0, pd.NA) * 100).fillna(0)
+    # Avoid Series.replace(0, pd.NA), which can trigger pandas nullable-dtype
+    # recursion errors on some deployed pandas versions.
+    decisive_denominator = decisive.where(decisive.ne(0))
+    out["win_rate"] = (out.wins / decisive_denominator * 100).fillna(0)
     return out
 
 
