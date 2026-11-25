@@ -52,100 +52,85 @@ class ArchiveUpload(BytesIO):
         super().__init__(content)
         self.name = name
 
-OWNER = "rajnet70"
-REPO = "Binance-discord-alert"
-ARCHIVE_BRANCH = "pingr-log-archive"
-API = "https://api.github.com"
+# Read the archive directly from Cloudflare R2 through the read-only archive Worker API.
+# No GitHub token or Streamlit secret is required.
+R2_ARCHIVE_API = "https://pingr-archive-sync.alisraja.workers.dev"
 
-def gh_headers(token):
-    return {"Authorization": f"Bearer {token}", "Accept": "application/vnd.github+json",
-            "X-GitHub-Api-Version": "2022-11-28", "User-Agent": "Pingr-Analytics-Dashboard"}
+@st.cache_data(ttl=60, show_spinner=False)
+def r2_archive_index(cursor=None):
+    params = {"cursor": cursor} if cursor else {}
+    response = requests.get(f"{R2_ARCHIVE_API}/dashboard/index", params=params, timeout=30)
+    response.raise_for_status()
+    return response.json()
 
-@st.cache_data(ttl=90, show_spinner=False)
-def archive_head(token):
-    url = f"{API}/repos/{OWNER}/{REPO}/branches/{ARCHIVE_BRANCH}"
-    r = requests.get(url, headers=gh_headers(token), timeout=25)
-    r.raise_for_status()
-    p = r.json()
-    return p["commit"]["sha"], p["commit"]["commit"]["committer"]["date"]
+@st.cache_data(ttl=3600, max_entries=2000, show_spinner=False)
+def r2_archive_file(key):
+    response = requests.get(
+        f"{R2_ARCHIVE_API}/dashboard/file",
+        params={"key": key},
+        timeout=(15, 120)
+    )
+    response.raise_for_status()
+    return response.content
 
-@st.cache_data(ttl=120, show_spinner=False)
-def archive_tree(commit_sha, token):
-    url = f"{API}/repos/{OWNER}/{REPO}/git/trees/{commit_sha}?recursive=1"
-    r = requests.get(url, headers=gh_headers(token), timeout=30)
-    r.raise_for_status()
-    logs, manifests = [], []
-    for item in r.json().get("tree", []):
-        path = item.get("path", "")
-        if item.get("type") != "blob":
-            continue
-        if path.startswith("pingr-archive__") and (path.endswith(".pending") or ".part-" in path):
-            logs.append({"path": path, "sha": item["sha"]})
-        elif path.startswith("pingr-archive__") and path.endswith(".pending.sync.json"):
-            manifests.append({"path": path, "sha": item["sha"]})
-        elif path == "alert_log-1311.jsonl":
-            logs.append({"path": path, "sha": item["sha"]})
-    return sorted(logs, key=lambda x:x["path"]), sorted(manifests, key=lambda x:x["path"])
+def load_archive():
+    objects = []
+    cursor = None
+    last_run = None
+    while True:
+        page = r2_archive_index(cursor)
+        objects.extend(
+            item for item in page.get("objects", [])
+            if str(item.get("key", "")).lower().endswith(".gz")
+        )
+        last_run = page.get("last_run") or last_run
+        cursor = page.get("cursor")
+        if not cursor:
+            break
 
-@st.cache_data(ttl=3600, max_entries=1000, show_spinner=False)
-def archive_blob(blob_sha, token):
-    url = f"{API}/repos/{OWNER}/{REPO}/git/blobs/{blob_sha}"
-    r = requests.get(url, headers=gh_headers(token), timeout=30)
-    r.raise_for_status()
-    p = r.json()
-    return base64.b64decode(p["content"]).decode("utf-8-sig", errors="replace")
-
-def load_archive(token):
-    head, updated = archive_head(token)
-    logs, manifests = archive_tree(head, token)
     loaded, errors = [], []
     with ThreadPoolExecutor(max_workers=8) as pool:
-        jobs = {pool.submit(archive_blob, item["sha"], token): item for item in logs}
+        jobs = {pool.submit(r2_archive_file, item["key"]): item for item in objects}
         for job in as_completed(jobs):
             item = jobs[job]
             try:
                 content = job.result()
-                if content.strip():
-                    loaded.append((item["path"], content.encode("utf-8")))
+                if content:
+                    name = item["key"].split("/")[-1].removesuffix(".gz") + ".jsonl"
+                    loaded.append((name, content))
             except Exception as exc:
-                errors.append(f'{item["path"]}: {type(exc).__name__}: {exc}')
-    loaded.sort(key=lambda x:x[0])
-    last_sync = None
-    if manifests:
-        try:
-            last_sync = json.loads(archive_blob(manifests[-1]["sha"], token)).get("syncedAt")
-        except Exception as exc:
-            errors.append(f"Latest manifest: {type(exc).__name__}: {exc}")
-    return loaded, {"head":head, "updated":updated, "files":len(logs),
-                    "loaded":len(loaded), "errors":errors, "last_sync":last_sync}
+                errors.append(f'{item["key"]}: {type(exc).__name__}: {exc}')
 
-st.sidebar.header("Live GitHub archive")
-st.sidebar.caption("Private source: rajnet70/Binance-discord-alert · branch: pingr-log-archive")
+    loaded.sort(key=lambda x: x[0])
+    uploaded_values = [item.get("uploaded") for item in objects if item.get("uploaded")]
+    updated = max(uploaded_values) if uploaded_values else "Not available"
+    return loaded, {
+        "files": len(objects),
+        "loaded": len(loaded),
+        "errors": errors,
+        "updated": updated,
+        "last_sync": (last_run or {}).get("completedAt") if isinstance(last_run, dict) else None,
+    }
+
+st.sidebar.header("Live Cloudflare R2 archive")
+st.sidebar.caption("Source: Cloudflare R2 · bucket: pingr · prefix: pingr/logs/")
 if st.sidebar.button("Refresh archive now", use_container_width=True):
     st.cache_data.clear()
 try:
-    token = st.secrets.get("GITHUB_TOKEN", "")
-except Exception:
-    token = ""
-token = token or os.getenv("GITHUB_TOKEN", "")
-if not token:
-    st.error("GitHub access is not configured. Add GITHUB_TOKEN to the Streamlit app Secrets.")
-    st.stop()
-try:
-    with st.spinner("Reading Pingr archive from GitHub…"):
-        archive_files, archive_status = load_archive(token)
+    with st.spinner("Reading live Pingr logs from Cloudflare R2…"):
+        archive_files, archive_status = load_archive()
 except Exception as exc:
-    st.error(f"Could not read the private archive: {type(exc).__name__}: {exc}")
+    st.error(f"Could not read the Cloudflare R2 archive: {type(exc).__name__}: {exc}")
     st.stop()
 uploads = [ArchiveUpload(name, content) for name, content in archive_files]
 st.sidebar.metric("Archive files loaded", f'{archive_status["loaded"]:,}')
-st.sidebar.caption(f'Archive branch updated: {archive_status["updated"]}')
-st.sidebar.caption(f'Last successful sync: {archive_status["last_sync"] or "Not available"}')
+st.sidebar.caption(f'Latest R2 object: {archive_status["updated"]}')
+st.sidebar.caption(f'Last archive sync: {archive_status["last_sync"] or "Not available"}')
 if archive_status["errors"]:
     st.sidebar.warning(f'{len(archive_status["errors"])} archive file(s) could not be read.')
 else:
-    st.sidebar.success("Archive read completed without file errors.")
-st.sidebar.caption("Branch discovery: 90 seconds. Tree refresh: 120 seconds. Unchanged blobs are cached by SHA.")
+    st.sidebar.success("R2 archive read completed without file errors.")
+st.sidebar.caption("R2 index refresh: 60 seconds. Immutable archive objects are cached by key.")
 
 
 def parse_files(files):
