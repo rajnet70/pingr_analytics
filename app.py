@@ -450,6 +450,7 @@ def synopsis_observations(alerts, generic):
     return notes
 
 
+
 if not uploads:
     st.warning("No readable JSONL log files were found on the archive branch yet.")
     st.stop()
@@ -462,303 +463,198 @@ if not combined_rows:
 combined, alerts, outcomes, generic = prepare(combined_rows)
 valid = alerts.dropna(subset=["final_percent"]).copy() if not alerts.empty and "final_percent" in alerts else pd.DataFrame()
 
-# Live archive status and requested coin/liquidity views.
-st.markdown('<div class="pingr-eyebrow">00 / Archive health</div>', unsafe_allow_html=True)
-st.header("Live archive health")
-event_counts = combined.get("event_type", pd.Series("unknown", index=combined.index)).fillna("unknown").value_counts()
-metric_row([
-    ("Unique records", f"{len(combined):,}"),
-    ("Files read", f'{archive_status["loaded"]:,}'),
-    ("Duplicate rows skipped", f"{duplicate_count:,}"),
-    ("Read / parse errors", f"{len(archive_status['errors']) + len(errors):,}")
-])
-st.caption(f'Archive source: GitHub branch {GITHUB_BRANCH} · Latest archive file: {archive_status["updated"]} · Last manifest sync: {archive_status["last_sync"] or "not available"}')
-with st.expander("Archived event inventory"):
-    st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
+# Parse timestamps once for reliable newest-first views.
+if "timestamp" in combined.columns:
+    combined["_ts"] = pd.to_datetime(combined["timestamp"], errors="coerce", utc=True)
+else:
+    combined["_ts"] = pd.NaT
+if not alerts.empty and "timestamp" in alerts.columns:
+    alerts["_ts"] = pd.to_datetime(alerts["timestamp"], errors="coerce", utc=True)
+if not outcomes.empty and "timestamp" in outcomes.columns:
+    outcomes["_ts"] = pd.to_datetime(outcomes["timestamp"], errors="coerce", utc=True)
+
+# Latest archive file is determined from the timestamp embedded in its archive name.
+latest_name = max(per_file.keys(), default=None)
+latest_rows = per_file.get(latest_name, []) if latest_name else []
+latest_df = make_df(latest_rows)
+if not latest_df.empty and "timestamp" in latest_df:
+    latest_df["_ts"] = pd.to_datetime(latest_df["timestamp"], errors="coerce", utc=True)
+else:
+    latest_df["_ts"] = pd.NaT
+latest_time = latest_df["_ts"].max() if not latest_df.empty else pd.NaT
+latest_time_pak = latest_time.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M:%S %p PKT") if pd.notna(latest_time) else "Timestamp unavailable"
+
+st.markdown('<div class="pingr-eyebrow">PINGR · LIVE INTELLIGENCE</div>', unsafe_allow_html=True)
+st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-subtitle">Decision-focused performance · Detector results · Coin intelligence · Latest archive activity</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+
+# Keep the archive controls compact and out of the main analysis.
+st.sidebar.header("Data connection")
+st.sidebar.caption("Private GitHub archive · pingr-log-archive")
+st.sidebar.metric("Log files loaded", f'{archive_status["loaded"]:,}')
+st.sidebar.caption(f'Latest file: {archive_status["updated"]}')
+if st.sidebar.button("Refresh latest data", use_container_width=True):
+    st.cache_data.clear()
+    st.rerun()
 if archive_status["errors"]:
-    with st.expander("Archive file read errors"):
+    with st.sidebar.expander(f'{len(archive_status["errors"])} file read errors'):
         st.write(archive_status["errors"])
+st.sidebar.caption("Auto-refresh: every 2 minutes")
 
-st.markdown('<div class="pingr-eyebrow">00 / Coin performance</div>', unsafe_allow_html=True)
-st.header("Best and worst performing coins")
-coin_data = pd.DataFrame()
-coin_return = None
-if not alerts.empty and {"symbol", "final_percent"}.issubset(alerts.columns):
-    coin_data, coin_return = alerts.copy(), "final_percent"
-elif not outcomes.empty and {"symbol", "pnl_percent"}.issubset(outcomes.columns):
-    coin_data, coin_return = latest_outcomes(outcomes).copy(), "pnl_percent"
-if not coin_data.empty and coin_return:
-    coin_data[coin_return] = pd.to_numeric(coin_data[coin_return], errors="coerce")
-    coin_data = coin_data.dropna(subset=["symbol", coin_return])
-    ranked = coin_data.groupby("symbol").agg(
-        observations=(coin_return, "size"),
-        average_return=(coin_return, "mean"),
-        median_return=(coin_return, "median"),
-        winning_records=(coin_return, lambda values: int((values > 0).sum()))
-    ).reset_index()
-    ranked["win_rate"] = ranked["winning_records"] / ranked["observations"] * 100
-    ranked = ranked[ranked["observations"] >= 2]
-    if not ranked.empty:
-        left, right = st.columns(2)
-        with left:
-            st.subheader("Top performers")
-            st.dataframe(ranked.sort_values("average_return", ascending=False).head(10).round(2), use_container_width=True, hide_index=True)
-        with right:
-            st.subheader("Worst performers")
-            st.dataframe(ranked.sort_values("average_return", ascending=True).head(10).round(2), use_container_width=True, hide_index=True)
-        st.caption("Closed-alert returns only; at least two observations per coin. Scanner skips are never counted as trades.")
-    else:
-        st.info("Closed-alert records exist, but no coin has at least two return observations yet.")
-else:
-    st.info("No archived closed-alert records with per-coin final returns or outcome PnL are available yet. Rankings will populate when those records reach the archive.")
-
-st.markdown('<div class="pingr-eyebrow">00 / Liquidity-only exclusions</div>', unsafe_allow_html=True)
-st.header("Liquidity-only missed-opportunity analysis")
-required_liq = {"event_type", "diagnostic.reason", "diagnostic.stage"}
-if required_liq.issubset(combined.columns):
-    liq = combined[
-        combined["event_type"].eq("scanner_gate_rejection")
-        & combined["diagnostic.stage"].eq("24h_liquidity")
-        & combined["diagnostic.reason"].eq("low_24h_volume")
-    ].copy()
-else:
-    liq = pd.DataFrame()
-if not liq.empty:
-    volume_col = "diagnostic.details.volume_24h_quote"
-    if volume_col in liq.columns:
-        liq[volume_col] = pd.to_numeric(liq[volume_col], errors="coerce")
-        liq = liq.dropna(subset=[volume_col])
-        metric_row([
-            ("Liquidity-only rejection records", f"{len(liq):,}"),
-            ("Distinct rejected coins", f'{liq["symbol"].nunique() if "symbol" in liq else 0:,}')
-        ])
-        st.dataframe(
-            liq[[c for c in ["timestamp", "symbol", volume_col] if c in liq.columns]].rename(
-                columns={volume_col: "24h quote volume (USDT)"}
-            ),
-            use_container_width=True, hide_index=True
-        )
-        st.subheader("Captured rejected coins under alternative thresholds")
-        rows = []
-        for threshold in [20_000_000, 15_000_000, 10_000_000]:
-            eligible = liq[liq[volume_col] >= threshold]
-            rows.append({
-                "Hypothetical minimum": f"${threshold / 1_000_000:.0f}M",
-                "Distinct coins that would pass": int(eligible["symbol"].nunique()) if "symbol" in eligible else 0,
-                "Captured rejection records that would pass": len(eligible)
-            })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        refresh = combined[combined["event_type"].eq("liquidity_universe_refresh")] if "event_type" in combined else pd.DataFrame()
-        recorded = pd.to_numeric(refresh.get("diagnostic.threshold_usdt", pd.Series(dtype="float64")), errors="coerce").dropna().unique()
-        if len(recorded):
-            st.caption("Recorded configured threshold(s): " + ", ".join(f"${v/1_000_000:.0f}M" for v in sorted(recorded)))
-        st.caption("Strictly filtered to low_24h_volume rejections at the 24h_liquidity gate. Alternative-threshold counts are not evidence that a rejected coin would have produced a profitable trade.")
-    else:
-        st.warning("Liquidity-only rejection records exist, but quote-volume values are missing.")
-else:
-    st.info("No liquidity-only rejections were found in the loaded archive. Other rejection reasons are intentionally excluded.")
-
-
-# Main glance view
-st.markdown('<div class="pingr-eyebrow">01 / Performance overview</div>', unsafe_allow_html=True)
-st.header("At a glance")
-win_rate = (valid.final_percent.gt(0).mean() * 100) if not valid.empty else 0
-avg_return = valid.final_percent.mean() if not valid.empty else float("nan")
+# 1. Executive overview
+st.header("Executive overview")
+closed_count = len(valid)
+wins = int((valid["final_percent"] >= 1.0).sum()) if closed_count else 0
+losses = int((valid["final_percent"] <= -0.5).sum()) if closed_count else 0
+neutral = max(0, closed_count - wins - losses)
+decisive = wins + losses
+decisive_rate = wins / decisive * 100 if decisive else float("nan")
+avg_return = pd.to_numeric(valid["final_percent"], errors="coerce").mean() if closed_count else float("nan")
+latest_alert_time = alerts["_ts"].max() if not alerts.empty and "_ts" in alerts else pd.NaT
+latest_alert_label = latest_alert_time.tz_convert("Asia/Karachi").strftime("%d %b · %I:%M %p PKT") if pd.notna(latest_alert_time) else "No alert records"
 metric_row([
-    ("Tracked alerts", f"{len(valid):,}"),
-    ("Win rate", f"{win_rate:.1f}%" if not valid.empty else "—"),
-    ("Average return", f"{avg_return:+.2f}%" if not valid.empty else "—"),
-    ("Logs loaded", f"{len(per_file):,}"),
+    ("Closed tracked alerts", f"{closed_count:,}"),
+    ("Wins / losses / neutral", f"{wins:,} / {losses:,} / {neutral:,}"),
+    ("Decisive win rate", f"{decisive_rate:.1f}%" if decisive else "—"),
+    ("Average final return", f"{avg_return:+.2f}%" if pd.notna(avg_return) else "—"),
 ])
-st.caption(f"{len(combined):,} unique records • {duplicate_count:,} duplicate records skipped • {len(errors):,} parse errors")
+st.caption(f'Latest alert record: {latest_alert_label} · {len(combined):,} unique events across {archive_status["loaded"]:,} archived files · {duplicate_count:,} duplicate rows removed')
 
-# Graph-first overview: compact detector mix and return distribution.
-if not valid.empty:
-    overview_left, overview_right = st.columns(2)
-    with overview_left:
-        detector_mix = valid["detector"].value_counts().rename_axis("Detector").reset_index(name="Alerts")
-        mix_fig = px.pie(detector_mix, names="Detector", values="Alerts", hole=.68,
-                         color_discrete_sequence=["#20d6a0", "#8b5cf6", "#22d3ee", "#fb7185"])
-        mix_fig.update_layout(template="plotly_dark", height=235, margin=dict(l=5,r=5,t=8,b=5),
-                              paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                              font=dict(color="#edf5ff"), legend=dict(orientation="h",y=-.12))
-        mix_fig.add_annotation(text=f"{len(valid)}<br>alerts",x=.5,y=.5,showarrow=False,
-                               font=dict(size=17,color="#edf5ff"))
-        st.plotly_chart(mix_fig,use_container_width=True,config={"displayModeBar":False})
-    with overview_right:
-        return_values = valid["final_percent"].dropna()
-        return_fig = px.histogram(pd.DataFrame({"Final return (%)":return_values}),
-                                  x="Final return (%)",nbins=14,
-                                  color_discrete_sequence=["#22d3ee"])
-        return_fig.update_layout(template="plotly_dark",height=235,margin=dict(l=8,r=8,t=8,b=8),
-                                 paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
-                                 font=dict(color="#edf5ff"),showlegend=False,
-                                 xaxis_title="Final return (%)",yaxis_title="Alert count")
-        st.plotly_chart(return_fig,use_container_width=True,config={"displayModeBar":False})
-
-
-st.markdown('<div class="pingr-eyebrow">02 / Recent activity</div>', unsafe_allow_html=True)
-st.header("Log intelligence")
-latest_name = list(per_file.keys())[-1]
-for filename, rows in per_file.items():
-    log_df, log_alerts, log_outcomes, log_generic = prepare(rows)
-    log_valid = log_alerts.dropna(subset=["final_percent"]).copy() if not log_alerts.empty and "final_percent" in log_alerts else pd.DataFrame()
-    log_win = log_valid.final_percent.gt(0).mean() * 100 if not log_valid.empty else 0
-    log_avg = log_valid.final_percent.mean() if not log_valid.empty else float("nan")
-    with st.expander(("LATEST · " if filename == latest_name else "LOG · ") + filename, expanded=(filename == latest_name)):
-        metric_row([
-            ("Records", f"{len(log_df):,}"),
-            ("Closed alerts", f"{len(log_valid):,}"),
-            ("Win rate", f"{log_win:.1f}%" if not log_valid.empty else "—"),
-            ("Average return", f"{log_avg:+.2f}%" if not log_valid.empty else "—"),
-        ])
-        perf_log = detector_summary(log_valid)
-        if not perf_log.empty:
-            st.markdown("**Detector snapshot**")
-            show = perf_log[["detector", "alerts", "wins", "losses", "neutral", "win_rate", "avg_return", "median_return"]].copy()
-            show["win_rate"] = show.win_rate.map(lambda x: f"{x:.1f}%")
-            show["avg_return"] = show.avg_return.map(lambda x: f"{x:+.2f}%")
-            show["median_return"] = show.median_return.map(lambda x: f"{x:+.2f}%")
-            show.columns = ["Detector", "Alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
-            st.dataframe(show, use_container_width=True, hide_index=True)
-        notes = synopsis_observations(log_valid, log_generic)
-        st.markdown("**What stood out**")
-        if notes:
-            for kind, note in notes:
-                if kind == "warn": st.warning(note)
-                elif kind == "good": st.success(note)
-                else: st.info(note)
-        else:
-            st.info("Not enough closed-alert data to generate observations yet.")
-
-# Historical comparisons across files
-st.markdown('<div class="pingr-eyebrow">03 / Cross-log learning</div>', unsafe_allow_html=True)
-st.header("Historical patterns")
-if len(per_file) < 2:
-    st.info("Upload at least two logs together to compare recurring patterns. This first version does not permanently store logs.")
-else:
-    hist_rows = []
-    for filename, rows in per_file.items():
-        _, a, _, _ = prepare(rows)
-        p = detector_summary(a)
-        if not p.empty:
-            for _, r in p.iterrows():
-                hist_rows.append({"log": filename, "detector": r.detector, "alerts": int(r.alerts), "avg_return": r.avg_return, "win_rate": r.win_rate})
-    hist = pd.DataFrame(hist_rows)
-    if not hist.empty:
-        recurring = hist.groupby("detector").agg(
-            logs_seen=("log", "nunique"),
-            total_alerts=("alerts", "sum"),
-            avg_return=("avg_return", "mean"),
-            negative_logs=("avg_return", lambda x: int((x < 0).sum())),
-        ).reset_index()
-        recurring["pattern"] = recurring.apply(
-            lambda r: "Recurring underperformance" if r.negative_logs >= 2 else ("Mixed results" if r.logs_seen >= 2 else "Single-log observation"), axis=1
-        )
-        st.dataframe(recurring.round(2), use_container_width=True, hide_index=True)
-        st.caption("Historical average = equal-weighted mean of each log's detector average. Recurring underperformance requires negative log-level averages in at least two separate logs. Detector Health below uses an alert-weighted average across all tracked alerts.")
-    else:
-        st.info("No comparable tracked-alert outcomes found across these files.")
-
-# Compact detector health across all uploaded logs
-st.markdown('<div class="pingr-eyebrow">04 / Detector performance</div>', unsafe_allow_html=True)
-st.header("Detector health")
+# 2. Detector performance
+st.header("Detector performance")
 perf_all = detector_summary(valid)
 if not perf_all.empty:
     show = perf_all[["detector", "alerts", "wins", "losses", "neutral", "win_rate", "avg_return", "median_return"]].copy()
-    show["win_rate"] = show.win_rate.map(lambda x: f"{x:.1f}%")
-    show["avg_return"] = show.avg_return.map(lambda x: f"{x:+.2f}%")
-    show["median_return"] = show.median_return.map(lambda x: f"{x:+.2f}%")
-    show.columns = ["Detector", "Alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Average return", "Median return"]
+    show["win_rate"] = show["win_rate"].map(lambda x: f"{x:.1f}%")
+    show["avg_return"] = show["avg_return"].map(lambda x: f"{x:+.2f}%")
+    show["median_return"] = show["median_return"].map(lambda x: f"{x:+.2f}%")
+    show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
     st.dataframe(show, use_container_width=True, hide_index=True)
-    chart_df = perf_all.sort_values("avg_return", ascending=True).copy()
-    fig = px.bar(
-        chart_df, x="avg_return", y="detector", orientation="h",
-        text=chart_df["avg_return"].map(lambda x: f"{x:+.2f}%"),
-        color="avg_return", color_continuous_scale=["#ff7185", "#263b58", "#42d6a4"],
-        labels={"avg_return": "Average final return", "detector": ""}
-    )
-    fig.update_layout(
-        template="plotly_dark", height=245, margin=dict(l=8, r=12, t=8, b=6),
-        paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        coloraxis_showscale=False, xaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,.12)", zeroline=True, zerolinecolor="rgba(226,232,240,.5)"),
-        yaxis=dict(showgrid=False), font=dict(color="#dce7f5")
-    )
+    chart = perf_all.sort_values("avg_return", ascending=True)
+    fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
+                 text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
+                 color="avg_return", color_continuous_scale=["#fb7185", "#263b58", "#20d6a0"],
+                 labels={"avg_return": "Average final return", "detector": ""})
+    fig.update_layout(template="plotly_dark", height=max(220, 65 * len(chart)),
+                      margin=dict(l=8, r=12, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
+                      plot_bgcolor="rgba(0,0,0,0)", coloraxis_showscale=False,
+                      font=dict(color="#edf5ff"))
     fig.update_traces(textposition="outside", cliponaxis=False)
     st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 else:
-    st.info("No final tracked alert outcomes available.")
+    st.info("No closed tracked-alert returns are available yet. Scanner skips and diagnostics are excluded from detector performance.")
 
-# Analyse alert_outcome records separately; never join them to alert_record rows.
-render_outcome_intelligence(outcomes)
+# 3. Coin intelligence
+st.header("Coin intelligence")
+coin_source = valid.copy() if not valid.empty and "symbol" in valid else pd.DataFrame()
+if not coin_source.empty:
+    coin_source["final_percent"] = pd.to_numeric(coin_source["final_percent"], errors="coerce")
+    coin_source = coin_source.dropna(subset=["symbol", "final_percent"])
+    coin_rank = coin_source.groupby("symbol").agg(
+        alerts=("final_percent", "size"),
+        avg_return=("final_percent", "mean"),
+        median_return=("final_percent", "median"),
+        wins=("final_percent", lambda x: int((x >= 1.0).sum()))
+    ).reset_index()
+    coin_rank = coin_rank[coin_rank["alerts"] >= 2]
+    if not coin_rank.empty:
+        coin_rank["win_rate"] = coin_rank["wins"] / coin_rank["alerts"] * 100
+        left, right = st.columns(2)
+        with left:
+            st.subheader("Strongest coins")
+            st.dataframe(coin_rank.sort_values("avg_return", ascending=False).head(8).round(2),
+                         use_container_width=True, hide_index=True)
+        with right:
+            st.subheader("Weakest coins")
+            st.dataframe(coin_rank.sort_values("avg_return", ascending=True).head(8).round(2),
+                         use_container_width=True, hide_index=True)
+        st.caption("Closed tracked alerts only · minimum two observations per coin.")
+    else:
+        st.info("Not enough closed-alert observations per coin to rank reliably.")
+else:
+    st.info("Coin rankings will appear when closed tracked-alert records include symbol and final return.")
 
-# Small operational pulse
-st.markdown('<div class="pingr-eyebrow">06 / Scanner telemetry</div>', unsafe_allow_html=True)
-st.header("Scanner activity")
-if not generic.empty:
-    sent = generic.get("alert_sent", pd.Series(False, index=generic.index)).fillna(False).astype(bool).sum()
-    spike5 = ncol(generic, "volume_spike_5m").mean()
-    spike15 = ncol(generic, "volume_spike_15m").mean()
+# 4. Signal quality — use the dedicated outcome stream, keeping it separate from alert_record.
+st.header("Signal quality")
+latest_eval = latest_outcomes(outcomes)
+if not latest_eval.empty:
+    for col in ["original_volume_5m", "original_rsi_15m", "original_score", "pnl_percent", "mfe_percent", "mae_percent"]:
+        if col in latest_eval:
+            latest_eval[col] = pd.to_numeric(latest_eval[col], errors="coerce")
+    counts = outcome_counts(latest_eval)
     metric_row([
-        ("Scanner snapshots", f"{len(generic):,}"),
-        ("Alert-sent markers", f"{int(sent):,}"),
-        ("Avg 5m volume spike", f"{spike5:.2f}x" if pd.notna(spike5) else "—"),
-        ("Avg 15m volume spike", f"{spike15:.2f}x" if pd.notna(spike15) else "—"),
+        ("Evaluated alert IDs", f'{counts["alerts"]:,}'),
+        ("Wins", f'{counts["wins"]:,}'),
+        ("Losses", f'{counts["losses"]:,}'),
+        ("Neutral", f'{counts["neutral"]:,}'),
+        ("Decisive win rate", f'{counts["decisive_rate"]:.1f}%' if pd.notna(counts["decisive_rate"]) else "—"),
     ])
-    if pd.notna(spike5) and pd.notna(spike15):
-        scanner_fig = px.bar(
-            pd.DataFrame({"Timeframe": ["5-minute", "15-minute"], "Average spike": [spike5, spike15]}),
-            x="Timeframe", y="Average spike", text_auto=".2f",
-            color="Timeframe", color_discrete_sequence=["#67d5e8", "#6689c7"]
-        )
-        scanner_fig.update_layout(
-            template="plotly_dark", height=220, margin=dict(l=8, r=8, t=10, b=8),
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-            showlegend=False, font=dict(color="#dce7f5"),
-            yaxis=dict(showgrid=True, gridcolor="rgba(148,163,184,.12)", title="Average volume spike (x)"),
-            xaxis=dict(showgrid=False)
-        )
-        st.plotly_chart(scanner_fig, use_container_width=True, config={"displayModeBar": False})
+    quality_cols = [c for c in ["original_score", "original_volume_5m", "original_rsi_15m", "pnl_percent", "mfe_percent", "mae_percent"] if c in latest_eval]
+    if quality_cols:
+        st.dataframe(latest_eval[["symbol", "result"] + quality_cols].sort_values(
+            "pnl_percent", ascending=False) if "pnl_percent" in quality_cols and "symbol" in latest_eval else latest_eval[["result"] + quality_cols],
+            use_container_width=True, hide_index=True)
+    st.caption("Latest evaluation per alert ID. Outcome records are analyzed separately and are not merged with detector alert records.")
+else:
+    st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
 
-with st.expander("Advanced diagnostics — open only when investigating a pattern"):
-    st.subheader("Tracked alert ledger")
-    if not alerts.empty:
-        cols = [c for c in ["symbol", "detector", "alert_time", "signal_score", "label", "final_percent", "peak_percent", "worst_percent", "exit_reason", "rsi_14", "rsi_6", "atr_pct", "vol_ratio", "taker_buy_ratio", "macd_5m", "macd_15m", "macd_1h", "btc_1h", "btc_4h", "btc_above_ma50_1h"] if c in alerts]
-        st.dataframe(alerts[cols], use_container_width=True, hide_index=True)
-    st.subheader("Momentum diagnostics")
-    mom = alerts[alerts.detector.eq("Momentum")] if not alerts.empty else pd.DataFrame()
-    if not mom.empty:
-        mcols = [c for c in ["symbol", "signal_score", "final_percent", "peak_percent", "worst_percent", "rsi_14", "rsi_6", "atr_pct", "vol_ratio", "taker_buy_ratio", "macd_5m", "macd_15m", "macd_1h", "btc_1h", "btc_4h"] if c in mom]
-        st.dataframe(mom[mcols], use_container_width=True, hide_index=True)
-    st.subheader("Pullback diagnostics")
-    pb = alerts[alerts.detector.eq("Pullback")] if not alerts.empty else pd.DataFrame()
-    if not pb.empty:
-        pcols = [c for c in ["symbol", "pullback", "run24", "dist_ma20", "rsi_14", "atr_pct", "vol_ratio", "taker_buy_ratio", "peak_percent", "worst_percent", "final_percent", "exit_reason"] if c in pb]
-        st.dataframe(pb[pcols], use_container_width=True, hide_index=True)
-    st.subheader("Timeframe outcome summary")
-    if not outcomes.empty:
-        for c in ["pnl_percent", "mfe_percent", "mae_percent"]:
-            outcomes[c] = pd.to_numeric(outcomes.get(c), errors="coerce")
-        if "timeframe" in outcomes:
-            tf = outcomes.groupby("timeframe", dropna=False).agg(
-                evaluations=("alert_id", "count"), unique_alerts=("alert_id", "nunique"),
-                avg_pnl=("pnl_percent", "mean"), avg_mfe=("mfe_percent", "mean"), avg_mae=("mae_percent", "mean")
-            ).reset_index()
-            st.dataframe(tf.round(3), use_container_width=True, hide_index=True)
-            st.caption("Timeframe evaluations are not separate tracked alerts.")
-    st.subheader("Raw event inventory")
-    counts = combined.event_type.value_counts().rename_axis("Event type").reset_index(name="Records")
-    st.dataframe(counts, use_container_width=True, hide_index=True)
+# 5. Latest archive log — explicit latest file metadata and useful activity, not raw telemetry.
+st.header("Latest log file")
+if latest_name:
+    st.markdown(f"**{latest_name}**")
+    file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
+    file_records = len(latest_rows)
+    metric_row([
+        ("Records in latest file", f"{file_records:,}"),
+        ("Distinct symbols", f'{latest_df["symbol"].nunique() if "symbol" in latest_df else 0:,}'),
+        ("Latest event time", latest_time_pak),
+        ("File size", f'{next((x["size"] for x in github_archive_index() if x["name"] == "pingr-archive__" + latest_name), 0) / 1024:.1f} KB'),
+    ])
+    if not file_event_counts.empty:
+        st.caption("Event mix: " + " · ".join(f"{k}: {v:,}" for k, v in file_event_counts.head(6).items()))
+    if "diagnostic.reason" in latest_df:
+        reasons = latest_df["diagnostic.reason"].dropna().astype(str).value_counts().head(5)
+        if not reasons.empty:
+            st.caption("Most common gate/skip reasons: " + " · ".join(f"{k} ({v})" for k, v in reasons.items()))
+    if not latest_df.empty and "_ts" in latest_df:
+        latest_activity = latest_df.sort_values("_ts", ascending=False, na_position="last")
+        useful = latest_activity[
+            ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
+                ["volume_cache_snapshot", "signal_quality_snapshot"]
+            )
+        ].head(12)
+        cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in useful]
+        if not useful.empty and cols:
+            st.dataframe(useful[cols], use_container_width=True, hide_index=True)
+        else:
+            st.info("The newest file contains telemetry snapshots but no alert/rejection events to display.")
+else:
+    st.info("No archive log file is available.")
+
+# Recent actual alerts, capped to 20 rows.
+st.header("Recent alerts")
+if not alerts.empty:
+    recent = alerts.sort_values("_ts", ascending=False, na_position="last").head(20).copy()
+    cols = [c for c in ["timestamp", "symbol", "detector", "alert_type", "signal_score", "final_percent", "peak_percent", "worst_percent", "exit_reason"] if c in recent]
+    if cols:
+        st.dataframe(recent[cols], use_container_width=True, hide_index=True)
+    else:
+        st.info("Alert records exist, but do not contain the expected display fields.")
+else:
+    st.info("No alert_record events are present in the loaded archive.")
+
+# Keep raw detail available only when deliberately requested.
+with st.expander("Advanced diagnostics · raw data and exports"):
+    st.caption("Open only when investigating a specific issue. This section is intentionally hidden by default.")
+    st.write(f"Archive files loaded: {archive_status['loaded']:,} · Read errors: {len(archive_status['errors']):,} · Parse errors: {len(errors):,}")
     if errors:
-        st.subheader("Parse errors")
-        st.dataframe(pd.DataFrame(errors), use_container_width=True, hide_index=True)
-
-st.markdown('<div class="pingr-eyebrow">06 / Data access</div>', unsafe_allow_html=True)
-st.header("Export & data")
-parsed_csv = combined.to_csv(index=False).encode("utf-8")
-st.download_button("Download parsed records (CSV)", parsed_csv, "pingr_parsed_records.csv", "text/csv")
-jsonl_out = "\n".join(json.dumps(r, default=str) for r in combined_rows)
-st.download_button("Download deduplicated records (JSONL)", jsonl_out, "pingr_deduplicated.jsonl", "application/json")
+        st.dataframe(pd.DataFrame(errors).head(100), use_container_width=True, hide_index=True)
+    event_counts = combined.get("event_type", pd.Series("unknown", index=combined.index)).fillna("unknown").value_counts()
+    st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
+    csv_data = combined.drop(columns=["_ts"], errors="ignore").to_csv(index=False).encode("utf-8")
+    st.download_button("Download all parsed records (CSV)", csv_data, "pingr_parsed_records.csv", "text/csv")
+    jsonl_out = "\\n".join(json.dumps(r, default=str) for r in combined_rows)
+    st.download_button("Download deduplicated records (JSONL)", jsonl_out, "pingr_deduplicated.jsonl", "application/json")
 
 st.divider()
-st.caption("PINGR ANALYTICS • Signal intelligence and detector diagnostics • Dashboard-only analysis; no changes are made to Pingr engine or configuration.")
+st.caption("PINGR ANALYTICS · Read-only analytics · R2 archive and Pingr engine are not modified by this dashboard.")
