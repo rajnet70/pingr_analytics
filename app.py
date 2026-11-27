@@ -19,46 +19,67 @@ st_autorefresh(interval=7200000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
-:root{--bg:#05080f;--panel:#0b1627;--line:rgba(66,184,244,.20);--muted:#91a9c1;--text:#eef7ff;--cyan:#42b8f4;--blue:#168bd0;--ice:#91d7f5;--green:#39e75f;--red:#ff5b63}
-.stApp{background:radial-gradient(ellipse at 50% -12%,rgba(20,117,183,.18),transparent 42%),linear-gradient(180deg,#05080f 0%,#07111e 52%,#050a13 100%);color:var(--text)}
-.stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.09;background-image:linear-gradient(rgba(66,184,244,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(66,184,244,.07) 1px,transparent 1px);background-size:52px 52px;mask-image:linear-gradient(to bottom,black,transparent 75%)}
-.block-container{max-width:1480px;padding:1.1rem 2rem 3rem;position:relative}
-[data-testid="stHeader"]{background:rgba(5,8,15,.82);backdrop-filter:blur(16px)}
-[data-testid="stSidebar"],section[data-testid="stSidebar"]{display:none!important}
-h1,h2,h3{letter-spacing:-.045em;color:var(--text)}
-.pingr-hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:28px;padding:28px 34px;border:1px solid rgba(66,184,244,.27);border-radius:22px;background:linear-gradient(112deg,rgba(7,20,36,.98),rgba(9,28,49,.96) 58%,rgba(9,19,38,.98));box-shadow:0 22px 60px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.045);margin:.2rem 0 1.1rem}
-.pingr-hero:after{content:"";position:absolute;width:370px;height:370px;right:-115px;top:-225px;border-radius:50%;background:radial-gradient(circle,rgba(35,164,226,.18),rgba(17,91,151,.06) 48%,transparent 70%);pointer-events:none}
-.pingr-brand{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px}
-.pingr-radar{width:72px;height:72px;border-radius:50%;position:relative;background:repeating-radial-gradient(circle,transparent 0 4px,rgba(48,174,239,.55) 4.7px 5.5px,transparent 6px 9px);filter:drop-shadow(0 0 8px rgba(43,174,240,.22))}
-.pingr-radar:after{content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:#42b8f4;left:50%;top:50%;transform:translate(-50%,-50%);box-shadow:0 0 10px #42b8f4}
+:root{--bg:#030b16;--panel:#071a2b;--panel2:#0a2238;--line:rgba(22,177,238,.48);--cyan:#16c9f5;--blue:#168bd0;--ice:#91e8ff;--green:#39e75f;--red:#ff5b63;--muted:#9bb6cb;--text:#f2f8ff}
+.stApp{background:radial-gradient(ellipse at 76% -8%,rgba(0,173,237,.20),transparent 36%),linear-gradient(145deg,#020813,#06182a 58%,#020b17);color:var(--text)}
+.stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.10;background:repeating-radial-gradient(circle at 0% 82%,transparent 0 26px,rgba(22,201,245,.55) 27px 28px,transparent 29px 43px);mask-image:linear-gradient(90deg,black,transparent 24%)}
+.block-container{max-width:1800px;padding:1.25rem 1.5rem 2.5rem;position:relative}
+[data-testid="stHeader"]{background:rgba(2,8,19,.82);backdrop-filter:blur(14px)}
+[data-testid="stSidebar"]{display:block!important;background:linear-gradient(180deg,#041322,#020b17)!important;border-right:1px solid rgba(22,177,238,.25);min-width:210px!important}
+[data-testid="stSidebar"]>div{padding-top:1rem}
+[data-testid="stSidebar"] [data-testid="stRadio"] label{padding:11px 13px;border-radius:11px;color:#d9eaf7;font-weight:700;margin:3px 0}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:hover{background:rgba(0,177,238,.13)}
+[data-testid="stSidebar"] [data-testid="stRadio"] label:has(input:checked){background:linear-gradient(100deg,#087fb8,#07528a);box-shadow:0 0 20px rgba(0,183,245,.27);color:white}
+[data-testid="stSidebar"] [data-testid="stRadio"] input{accent-color:#16c9f5}
+.sidebar-brand{display:flex;flex-direction:column;align-items:center;padding:8px 0 26px;border-bottom:1px solid rgba(22,177,238,.16);margin-bottom:20px}
+.pingr-radar{width:62px;height:62px;border-radius:50%;background:repeating-radial-gradient(circle,transparent 0 3px,rgba(48,174,239,.72) 3.7px 4.5px,transparent 5px 8px);filter:drop-shadow(0 0 8px rgba(43,174,240,.25));position:relative}
+.pingr-radar:after{content:"";position:absolute;width:8px;height:8px;border-radius:50%;background:#42b8f4;left:50%;top:50%;transform:translate(-50%,-50%);box-shadow:0 0 10px #42b8f4}
 .pingr-wordmark{font-size:2.65rem;line-height:1.05;font-weight:400;letter-spacing:-.07em;color:#42b8f4;text-shadow:0 2px 0 #176b9e}
-.pingr-hero-copy{position:relative;z-index:1;min-width:0}
-.pingr-eyebrow{color:#91d7f5;text-transform:uppercase;letter-spacing:.19em;font-size:.66rem;font-weight:850;margin:0 0 .55rem}
-.pingr-title{font-size:clamp(1.75rem,3.4vw,2.65rem);font-weight:900;letter-spacing:-.075em;margin:0;color:#f3f8ff;line-height:1.05}
-.pingr-title span{background:linear-gradient(100deg,#42b8f4,#91d7f5);-webkit-background-clip:text;background-clip:text;color:transparent}
-.pingr-subtitle{color:#a9bfd4;font-size:.93rem;margin:.55rem 0 0}
-.pingr-hero-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
-.pingr-chip{display:inline-block;padding:6px 10px;border:1px solid rgba(66,184,244,.23);border-radius:999px;background:rgba(4,13,24,.58);color:#c7e4f6;font-size:.70rem;font-weight:750}
+.sidebar-analytics{font-size:1.05rem;color:#dceefa;margin-top:6px}
+.app-topline{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid rgba(22,177,238,.18);padding:4px 0 16px;margin-bottom:18px;color:#d8eaf8}
+.app-topline>div:first-child{display:flex;flex-direction:column;gap:4px}
+.top-eyebrow,.page-kicker{font-size:.66rem;letter-spacing:.19em;color:#54d7ff;font-weight:900}
+.topline-right{display:flex;gap:18px;align-items:center;color:#9db9cf;font-size:.78rem}
+.live-pill{border:1px solid rgba(57,231,95,.35);border-radius:999px;padding:7px 12px;color:#b9ffd0}
+.live-pill i,.status-live{display:inline-block;width:8px;height:8px;background:#39e75f;border-radius:50%;margin-right:7px;box-shadow:0 0 10px #39e75f}
+.page-heading{font-size:2rem;font-weight:900;letter-spacing:-.055em;color:#f4f9ff;margin-top:3px}
+.page-subheading{color:#a9c4d9;font-size:.91rem;margin:0 0 17px}
+.top-status{display:flex;align-items:center;gap:12px;color:#c4d8e9;font-size:.78rem;margin:5px 0 15px}
+.top-status b{font-size:.65rem;letter-spacing:.1em;color:#9ebbd2}
+.status-divider{height:30px;width:1px;background:rgba(22,177,238,.25);margin:0 5px}
+.archive-meta{color:#8daac1}
+.kpi-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:12px;margin:10px 0 18px}
+.kpi-card{position:relative;display:grid;grid-template-columns:42px 1fr;grid-template-rows:auto auto;align-items:center;column-gap:8px;padding:13px 14px;border:1px solid rgba(22,177,238,.55);border-radius:16px;background:linear-gradient(145deg,rgba(8,34,56,.98),rgba(3,15,29,.98));box-shadow:0 0 16px rgba(0,177,238,.08),inset 0 1px rgba(255,255,255,.04);min-height:92px}
+.kpi-icon{grid-row:1/3;font-size:1.8rem;color:#16c9f5;text-align:center}
+.kpi-label{font-size:.78rem;color:#d6e7f4;font-weight:700}
+.kpi-value{font-size:1.8rem;font-weight:900;color:#f7fbff;line-height:1.1}
+.kpi-card.green .kpi-icon,.kpi-card.green .kpi-value{color:#39e75f}
+.kpi-card.red .kpi-icon,.kpi-card.red .kpi-value{color:#ff5b63}
+.panel-title{font-size:1.05rem;font-weight:900;color:#f1f8ff;padding:12px 14px 8px;border:1px solid rgba(22,177,238,.42);border-bottom:0;border-radius:15px 15px 0 0;background:linear-gradient(100deg,rgba(8,35,57,.98),rgba(4,18,32,.96))}
+.panel-sub{font-size:.8rem;color:#8eb1c9;font-weight:500}
+[data-testid="stPlotlyChart"],[data-testid="stDataFrame"]{border:1px solid rgba(22,177,238,.42);border-radius:0 0 15px 15px;overflow:hidden;background:rgba(5,21,37,.86);padding:4px}
+[data-testid="stDataFrame]{border-radius:12px}
+[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(8,34,56,.96),rgba(3,15,29,.98));border:1px solid rgba(22,177,238,.32);border-radius:14px;padding:13px 15px;min-height:86px}
+[data-testid="stMetricLabel"]{color:#9ebbd2;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;font-weight:800}
+[data-testid="stMetricValue"]{color:#f3f9ff;font-weight:900;font-size:1.55rem}
+.mini-metric{display:flex;align-items:center;gap:8px;padding:10px 12px;border:1px solid rgba(22,177,238,.25);border-top:0;background:rgba(5,21,37,.84);font-size:.78rem}
+.mini-metric:last-child{border-radius:0 0 12px 12px}
+.mini-metric span{color:#c7ddec;flex:1}.mini-metric b{font-size:.78rem}.mini-metric i{color:#607b91;font-style:normal}
+.positive{color:#39e75f}.negative{color:#ff5b63}
+.insight-strip{display:flex;align-items:stretch;gap:0;border:1px solid rgba(22,177,238,.48);border-radius:15px;margin:18px 0;background:linear-gradient(100deg,rgba(7,29,49,.98),rgba(3,15,29,.98));overflow:hidden}
+.insight-title{display:flex;align-items:center;padding:14px 18px;color:#55dfff;font-weight:900;letter-spacing:.08em;min-width:155px}
+.insight-cell{display:flex;flex-direction:column;justify-content:center;padding:12px 18px;border-left:1px solid rgba(22,177,238,.28);flex:1;min-width:0}
+.insight-cell small{font-size:.63rem;letter-spacing:.1em;color:#8daec5;font-weight:800}
+.insight-cell b{font-size:1rem;color:#f2f8ff;margin:3px 0}
+.insight-cell span{font-size:.76rem;color:#39e75f}
+h1,h2,h3{letter-spacing:-.04em;color:var(--text)}
 h2{font-size:1.2rem!important;margin:1rem 0 .7rem!important;font-weight:850!important}
 h3{font-size:1rem!important;font-weight:800!important}
-[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(13,34,56,.96),rgba(8,20,35,.98));border:1px solid rgba(66,184,244,.22);border-radius:16px;padding:15px 17px;box-shadow:0 10px 28px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.04);min-height:100px}
-[data-testid="stMetric"]:hover{border-color:rgba(66,184,244,.55);box-shadow:0 14px 32px rgba(0,0,0,.24),0 0 22px rgba(36,159,222,.08)}
-[data-testid="stMetricLabel"]{color:#9ebbd2;font-size:.71rem;letter-spacing:.065em;text-transform:uppercase;font-weight:800}
-[data-testid="stMetricValue"]{color:#f3f9ff;font-weight:900;font-size:1.75rem;letter-spacing:-.055em}
-div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:14px;background:rgba(9,22,38,.82);overflow:hidden}
-.stButton button,.stDownloadButton button{border-radius:11px;border:1px solid rgba(66,184,244,.36);min-height:41px;background:linear-gradient(110deg,rgba(13,69,105,.9),rgba(12,43,76,.92));color:#f2f9ff;font-weight:800}
-.stButton button:hover,.stDownloadButton button:hover{border-color:#91d7f5;box-shadow:0 0 20px rgba(66,184,244,.17);color:white}
-[data-testid="stDataFrame"]{border:1px solid rgba(66,184,244,.18);border-radius:13px;overflow:hidden;background:rgba(7,17,30,.82)}
-button[data-baseweb="tab"]{color:#9eb6cb!important;font-weight:800!important;padding:11px 14px!important;border:1px solid transparent!important;border-radius:10px 10px 0 0!important}
-button[data-baseweb="tab"][aria-selected="true"]{color:#72cefa!important;background:rgba(22,112,165,.16)!important;border:1px solid rgba(66,184,244,.22)!important;border-bottom:2px solid #42b8f4!important}
-[data-testid="stTabs"] [data-baseweb="tab-list"]{gap:5px;border-bottom:1px solid rgba(66,184,244,.17);margin-bottom:18px;flex-wrap:wrap}
-[data-testid="stTabs"] [data-baseweb="tab-panel"]{padding-top:13px}
-[data-testid="stPlotlyChart"]{border:1px solid rgba(66,184,244,.18);border-radius:16px;background:linear-gradient(145deg,rgba(10,26,44,.86),rgba(6,15,27,.82));padding:6px;box-shadow:0 10px 28px rgba(0,0,0,.14)}
-[data-testid="stAlert"]{border-radius:13px}
-hr{border-color:rgba(66,184,244,.16)!important}
-.stCaption{color:#8fa9c1}
-@media(max-width:900px){.block-container{padding:.8rem .9rem 1.7rem}.pingr-hero{padding:21px 20px;gap:20px}.pingr-brand{min-width:112px}.pingr-radar{width:58px;height:58px}.pingr-wordmark{font-size:2.15rem}[data-testid="stMetric"]{padding:11px 12px;min-height:86px}[data-testid="stMetricValue"]{font-size:1.35rem}}
-@media(max-width:600px){.block-container{padding:.55rem .6rem 1.3rem}.pingr-hero{padding:17px 15px;gap:13px}.pingr-brand{min-width:78px}.pingr-radar{width:46px;height:46px}.pingr-wordmark{font-size:1.65rem}.pingr-title{font-size:1.65rem}.pingr-subtitle{font-size:.82rem}[data-testid="stMetricLabel"]{font-size:.64rem}[data-testid="stMetricValue"]{font-size:1.12rem}}
+.stButton button,.stDownloadButton button{border-radius:10px;border:1px solid rgba(22,177,238,.52);min-height:40px;background:linear-gradient(110deg,#075d8e,#073a63);color:#f2f9ff;font-weight:800}
+[data-testid="stExpander"]{border:1px solid rgba(22,177,238,.24);border-radius:12px;background:rgba(7,22,38,.84)}
+[data-testid="stAlert"]{border-radius:12px}
+hr{border-color:rgba(22,177,238,.16)!important}
+@media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.insight-strip{flex-wrap:wrap}.insight-cell{min-width:30%}}
+@media(max-width:750px){[data-testid="stSidebar"]{min-width:175px!important}.block-container{padding:.8rem .75rem 2rem}.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi-value{font-size:1.45rem}.page-heading{font-size:1.55rem}.topline-right{gap:7px;font-size:.66rem}.insight-title{min-width:100%;padding:10px 14px}.insight-cell{min-width:45%;padding:10px}.mini-metric{flex-wrap:wrap}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -498,79 +519,65 @@ latest_time = latest_df["_ts"].max() if not latest_df.empty else pd.NaT
 latest_time_pak = latest_time.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M:%S %p PKT") if pd.notna(latest_time) else "Timestamp unavailable"
 
 today_hero_label = datetime.now(ZoneInfo("Asia/Karachi")).strftime("%a · %d %b %Y")
-st.markdown(
-    f'<div class="pingr-hero">'
-    f'<div class="pingr-brand"><div class="pingr-radar"></div><div class="pingr-wordmark">pingr</div></div>'
-    f'<div class="pingr-hero-copy"><div class="pingr-eyebrow">Market intelligence workspace</div>'
-    f'<div class="pingr-title">PINGR <span>ANALYTICS</span></div>'
-    f'<div class="pingr-subtitle">Scanner performance · Signal quality · Coin intelligence</div>'
-    f'<div class="pingr-hero-meta"><span class="pingr-chip">● R2 CONNECTED</span>'
-    f'<span class="pingr-chip">▣ {today_hero_label} · PKT</span>'
-    f'<span class="pingr-chip">↻ 2-HOUR ARCHIVE CYCLE</span></div></div></div>',
+st.sidebar.markdown(
+    '<div class="sidebar-brand"><div class="pingr-radar"></div><div class="pingr-wordmark">pingr</div><div class="sidebar-analytics">Analytics</div></div>',
     unsafe_allow_html=True
 )
+page_options = ["Overview","Signals","Performance","Patterns","Symbols","Logs & Archives","Settings"]
+active_page = st.sidebar.radio("NAVIGATION",page_options,label_visibility="collapsed",key="pingr_primary_navigation")
+page_map = {
+    "Overview":"Overview", "Signals":"Scanner intelligence",
+    "Performance":"Detector performance", "Patterns":"Patterns",
+    "Symbols":"Coin intelligence", "Logs & Archives":"Logs & diagnostics",
+    "Settings":"Signal quality"
+}
+active_page = page_map[active_page]
+st.markdown(
+    f'<div class="app-topline"><div><span class="top-eyebrow">PINGR / ANALYTICS</span><b>{today_hero_label}</b></div>'
+    f'<div class="topline-right"><span class="live-pill"><i></i> R2 CONNECTED</span><span class="top-cycle">2-HOUR ARCHIVE CYCLE</span></div></div>',
+    unsafe_allow_html=True
+)
+if active_page == "Overview":
+    st.markdown('<div class="page-kicker">01 / COMMAND CENTRE</div><div class="page-heading">Signal Intelligence</div><div class="page-subheading">Performance, patterns and insights from Pingr signal archives.</div>', unsafe_allow_html=True)
 
-
-
-# High-level navigation: keep the primary intelligence visible without a long continuous scroll.
-tab_overview, tab_patterns, tab_scanner, tab_detectors, tab_coins, tab_quality, tab_logs = st.tabs([
-    "Overview", "Patterns", "Scanner intelligence", "Detector performance", "Coin intelligence", "Signal quality", "Logs & diagnostics"
-])
-
-with tab_overview:
-    # 1. Executive overview
-    st.header("Executive overview")
     closed_count = len(valid)
     wins = int((valid["final_percent"] >= 1.0).sum()) if closed_count else 0
     losses = int((valid["final_percent"] <= -0.5).sum()) if closed_count else 0
     neutral = max(0, closed_count - wins - losses)
     decisive = wins + losses
+    win_rate = wins / closed_count * 100 if closed_count else float("nan")
     decisive_rate = wins / decisive * 100 if decisive else float("nan")
     avg_return = pd.to_numeric(valid["final_percent"], errors="coerce").mean() if closed_count else float("nan")
     latest_alert_time = alerts["_ts"].max() if not alerts.empty and "_ts" in alerts else pd.NaT
-    latest_alert_label = (latest_alert_time.tz_convert("Asia/Karachi").strftime("%d %b · %I:%M %p PKT")
-                          if pd.notna(latest_alert_time) else
-                          ("Timestamp unavailable" if not alerts.empty else "No alert records"))
-    metric_row([
-        ("Closed tracked alerts", f"{closed_count:,}"),
-        ("Wins / losses / neutral", f"{wins:,} / {losses:,} / {neutral:,}"),
-        ("Decisive win rate", f"{decisive_rate:.1f}%" if decisive else "—"),
-        ("Average final return", f"{avg_return:+.2f}%" if pd.notna(avg_return) else "—"),
-    ])
-    st.caption(f'Latest alert record: {latest_alert_label} · {len(combined):,} unique events across {archive_status["loaded"]:,} archived files · {duplicate_count:,} duplicate rows removed')
+    latest_alert_label = (latest_alert_time.tz_convert("Asia/Karachi").strftime("%d %b %Y, %H:%M PKT")
+                          if pd.notna(latest_alert_time) else "Timestamp unavailable")
 
-    # Winner vs loser intelligence from the dedicated outcome stream.
-    st.subheader("Winners vs losers · what was different?")
     overview_outcomes = latest_outcomes(outcomes)
-    # Shared pattern results feed both the compact Overview panel and the dedicated Patterns page.
     classified = pd.DataFrame()
     pattern_rows = []
-    pattern_specs = []
-    winner_n = 0
-    loser_n = 0
+    winner_n = loser_n = 0
+    summary_df = pd.DataFrame()
+    liquidity_field = None
+    macd_fields = []
     if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcomes.columns):
         overview_outcomes = overview_outcomes.copy()
         overview_outcomes["result"] = overview_outcomes["result"].astype(str).str.lower()
-        for field in [
+        numeric_fields = [
             "pnl_percent", "original_volume_5m", "original_price_change_5m",
             "original_rsi_15m", "original_score", "original_liquidity",
             "original_liquidity_usd", "original_quote_volume_24h",
             "original_volume_24h", "original_turnover_24h"
-        ]:
+        ]
+        for field in numeric_fields:
             if field in overview_outcomes:
                 overview_outcomes[field] = pd.to_numeric(overview_outcomes[field], errors="coerce")
-
-        # Detect explicitly named liquidity/24h quote-volume fields; never relabel
-        # a short-term volume ratio as liquidity.
         liquidity_fields = [
             col for col in overview_outcomes.columns
             if any(token in col.lower() for token in ("liquidity", "quote_volume", "turnover_24h", "volume_24h"))
             and pd.api.types.is_numeric_dtype(overview_outcomes[col])
         ]
-        liquidity_field = next(
-            (col for col in liquidity_fields if "original" in col.lower()),
-            liquidity_fields[0] if liquidity_fields else None
-        )
+        liquidity_field = next((col for col in liquidity_fields if "original" in col.lower()),
+                               liquidity_fields[0] if liquidity_fields else None)
         indicator_fields = [
             ("original_score", "Signal score"),
             ("original_volume_5m", "5m volume ratio"),
@@ -578,7 +585,7 @@ with tab_overview:
             ("original_rsi_15m", "15m RSI"),
         ]
         if liquidity_field:
-            indicator_fields.append((liquidity_field, "Liquidity / 24h volume"))
+            indicator_fields.append((liquidity_field, "24h Quote Vol"))
         macd_fields = [
             (field, label) for field, label in [
                 ("original_macd_5m", "MACD 5m"),
@@ -586,20 +593,15 @@ with tab_overview:
                 ("original_macd_1h", "MACD 1h")
             ] if field in overview_outcomes.columns
         ]
-
-        classified = overview_outcomes[
-            overview_outcomes["result"].isin(["win", "loss", "neutral"])
-        ].copy()
+        classified = overview_outcomes[overview_outcomes["result"].isin(["win", "loss", "neutral"])].copy()
         if not classified.empty:
             classified["symbol"] = classified["symbol"].fillna("Unknown").astype(str)
-            if "pnl_percent" in classified:
-                classified = classified.sort_values("pnl_percent", ascending=False, na_position="last")
             summary_rows = []
             for result_name, display_name in [("win", "Winners"), ("loss", "Losers"), ("neutral", "Neutral")]:
                 group = classified[classified["result"].eq(result_name)]
                 row = {"Group": display_name, "Alerts": len(group)}
                 if "pnl_percent" in group:
-                    row["Median P&L %"] = pd.to_numeric(group["pnl_percent"], errors="coerce").median()
+                    row["Median P&L %"] = group["pnl_percent"].median()
                 for field, label in indicator_fields:
                     if field in group:
                         row[label] = pd.to_numeric(group[field], errors="coerce").median()
@@ -609,25 +611,19 @@ with tab_overview:
                         row[label + " bullish %"] = group.loc[known, field].astype(bool).mean() * 100
                 summary_rows.append(row)
             summary_df = pd.DataFrame(summary_rows)
+
             def compact_volume(value):
                 if pd.isna(value):
                     return "—"
                 value = float(value)
-                magnitude = abs(value)
-                if magnitude >= 1_000_000_000:
+                if abs(value) >= 1_000_000_000:
                     return f"{value / 1_000_000_000:.2f}B"
-                if magnitude >= 1_000_000:
+                if abs(value) >= 1_000_000:
                     return f"{value / 1_000_000:.1f}M"
-                if magnitude >= 1_000:
+                if abs(value) >= 1_000:
                     return f"{value / 1_000:.1f}K"
                 return f"{value:.0f}"
 
-            # Patterns are calculated from actual winner/loser outcomes in the
-            # currently loaded archive. Use IQR (25th–75th percentile), not
-            # min/max, so one outlier does not define a supposed winning range.
-            st.divider()
-            st.subheader("Patterns · winning conditions")
-            st.caption("Observed middle 50% ranges for winners compared with losers. These are descriptive patterns, not trading rules.")
             pattern_specs = [
                 ("original_rsi_15m", "15m RSI", "number"),
                 ("original_volume_5m", "5m volume ratio", "multiple"),
@@ -635,21 +631,20 @@ with tab_overview:
                 ("original_price_change_5m", "5m price change", "percent"),
             ]
             if liquidity_field:
-                pattern_specs.insert(1, (liquidity_field, "24h liquidity / quote volume", "volume"))
-            pattern_rows = []
+                pattern_specs.insert(1, (liquidity_field, "24h quote volume", "volume"))
+            winner_n = int(classified["result"].eq("win").sum())
+            loser_n = int(classified["result"].eq("loss").sum())
             for field, label, kind in pattern_specs:
                 if field not in classified.columns:
                     continue
                 row = {"Pattern": label}
                 for result_name, prefix in [("win", "Winners"), ("loss", "Losers")]:
-                    values = pd.to_numeric(
-                        classified.loc[classified["result"].eq(result_name), field],
-                        errors="coerce"
-                    ).dropna()
+                    values = pd.to_numeric(classified.loc[classified["result"].eq(result_name), field], errors="coerce").dropna()
                     if values.empty:
                         row[prefix] = "No data"
+                        row[prefix + " n"] = 0
                         continue
-                    low, median, high = values.quantile([0.25, 0.50, 0.75]).tolist()
+                    low, median, high = values.quantile([.25, .50, .75]).tolist()
                     if kind == "volume":
                         row[prefix] = f"{compact_volume(low)}–{compact_volume(high)} (med {compact_volume(median)})"
                     elif kind == "percent":
@@ -661,331 +656,392 @@ with tab_overview:
                     row[prefix + " n"] = len(values)
                 pattern_rows.append(row)
 
-            if pattern_rows:
-                winner_n = int(classified["result"].eq("win").sum())
-                loser_n = int(classified["result"].eq("loss").sum())
-            else:
-                st.info("No supported indicator fields are available to chart patterns yet.")
-        else:
-            st.info("No final win/loss/neutral outcomes are available yet.")
-        if not liquidity_field:
-            st.caption("Liquidity is not present as an explicit field in the current outcome records, so it is not estimated from volume ratios.")
-    else:
-        st.info("The current archive does not contain usable alert_outcome records with symbols and results. The comparison will populate when those records are available.")
-
-
-    st.subheader("Outcome mix")
-    if closed_count:
-        outcome_mix = pd.DataFrame({"Outcome": ["Wins", "Losses", "Neutral"], "Alerts": [wins, losses, neutral]})
-        outcome_fig = px.pie(outcome_mix, names="Outcome", values="Alerts", hole=.68,
-                             color="Outcome", color_discrete_map={"Wins":"#39e75f","Losses":"#ff5b63","Neutral":"#7893aa"})
-        outcome_fig.update_traces(textinfo="percent", textposition="inside",
-                                  marker=dict(line=dict(color="#07111e", width=3)),
-                                  hovertemplate="%{label}: %{value}<extra></extra>")
-        outcome_fig.update_layout(template="plotly_dark", height=340, showlegend=True,
-                                  margin=dict(l=12,r=12,t=12,b=12), paper_bgcolor="rgba(0,0,0,0)",
-                                  plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#eaf5ff"),
-                                  legend=dict(orientation="h",y=-.06,x=.5,xanchor="center"))
-        st.plotly_chart(outcome_fig,use_container_width=True,config={"displayModeBar":False})
-    else:
-        st.info("Outcome distribution will appear when closed alert records are available.")
-
-    st.divider()
-    st.subheader("Return snapshot")
-    if closed_count:
-        median_return = pd.to_numeric(valid["final_percent"], errors="coerce").median()
-        best_return = pd.to_numeric(valid["final_percent"], errors="coerce").max()
-        worst_return = pd.to_numeric(valid["final_percent"], errors="coerce").min()
-        metric_row([
-            ("Median final return", f"{median_return:+.2f}%" if pd.notna(median_return) else "—"),
-            ("Best final return", f"{best_return:+.2f}%" if pd.notna(best_return) else "—"),
-            ("Worst final return", f"{worst_return:+.2f}%" if pd.notna(worst_return) else "—"),
-        ])
-    else:
-        st.info("Return summary will appear when closed tracked-alert records are available.")
-
-with tab_patterns:
-    st.header("Patterns · winning conditions")
-    st.caption("A focused workspace for comparing the conditions behind winning and losing alerts. All figures come from the latest evaluated outcome per alert ID.")
-
-    if not classified.empty and "symbol" in classified.columns:
-        winner_n = int(classified["result"].eq("win").sum())
-        loser_n = int(classified["result"].eq("loss").sum())
-        neutral_n = int(classified["result"].eq("neutral").sum())
-        metric_row([
-            ("Winning alerts", f"{winner_n:,}"),
-            ("Losing alerts", f"{loser_n:,}"),
-            ("Neutral alerts", f"{neutral_n:,}"),
-        ])
-
-        st.subheader("Outcome profiles")
-        st.caption("Median indicator readings at alert time. Green identifies winners; red identifies losers.")
-        if not summary_df.empty:
-            profile_view = summary_df.rename(columns={"Group":"Outcome"}).copy()
-            profile_style = profile_view.style
-            if "Outcome" in profile_view.columns:
-                profile_style = profile_style.map(
-                    lambda value: "color:#39e75f;font-weight:800" if value == "Winners"
-                    else ("color:#ff5b63;font-weight:800" if value == "Losers" else "color:#9bb2c7;font-weight:800"),
-                    subset=["Outcome"]
-                )
-            st.dataframe(profile_style, use_container_width=True, hide_index=True)
-
-        st.subheader("Winning and losing symbols")
-        symbol_cols = [col for col in [
-            "symbol", "result", "pnl_percent", "original_score",
-            "original_volume_5m", "original_rsi_15m", "original_price_change_5m"
-        ] if col in classified.columns]
-        if liquidity_field and liquidity_field in classified.columns and liquidity_field not in symbol_cols:
-            symbol_cols.append(liquidity_field)
-        if macd_fields:
-            symbol_cols.extend(field for field, _ in macd_fields if field in classified.columns and field not in symbol_cols)
-        symbol_view = classified[symbol_cols].copy().rename(columns={
-            "symbol":"Symbol", "result":"Outcome", "pnl_percent":"P&L %",
-            "original_score":"Signal score", "original_volume_5m":"5m volume ratio",
-            "original_rsi_15m":"15m RSI", "original_price_change_5m":"5m price change %",
-        })
-        if liquidity_field and liquidity_field in classified.columns:
-            symbol_view = symbol_view.rename(columns={liquidity_field:"Liquidity / 24h volume"})
-        for field, label in macd_fields:
-            if field in symbol_view.columns:
-                symbol_view = symbol_view.rename(columns={field:label})
-        symbol_tabs = st.tabs(["Winners", "Losers"])
-        for pane, result_name in zip(symbol_tabs, ["win", "loss"]):
-            with pane:
-                subset = symbol_view[classified["result"].eq(result_name)].head(20)
-                if subset.empty:
-                    st.info(f"No {result_name} outcomes in the current archive.")
-                else:
-                    formats = {}
-                    for col in subset.columns:
-                        if col in ("P&L %", "5m price change %"):
-                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):+.2f}%"
-                        elif col == "15m RSI":
-                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.1f}"
-                        elif col == "5m volume ratio":
-                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.2f}×"
-                        elif col == "Liquidity / 24h volume":
-                            formats[col] = compact_volume
-                    st.dataframe(subset.style.format(formats, na_rep="—"), use_container_width=True, hide_index=True)
-
-        st.divider()
-        st.subheader("Indicator patterns")
-        st.caption("Ranges show the 25th–75th percentile, with the median in parentheses. Sample counts are shown separately.")
-        if pattern_rows:
-            pattern_detail = pd.DataFrame(pattern_rows).rename(columns={
-                "Winners n":"Winner sample", "Losers n":"Loser sample"
-            })
-            pattern_style = pattern_detail.style
-            if "Winners" in pattern_detail.columns:
-                pattern_style = pattern_style.set_properties(subset=["Winners"], **{"color":"#39e75f","font-weight":"700"})
-            if "Losers" in pattern_detail.columns:
-                pattern_style = pattern_style.set_properties(subset=["Losers"], **{"color":"#ff5b63","font-weight":"700"})
-            st.dataframe(pattern_style, use_container_width=True, hide_index=True)
-            if min(winner_n, loser_n) < 5:
-                st.warning(f"Early read only: {winner_n} winners and {loser_n} losers. These ranges are unstable with small samples and are not trading thresholds.")
-            else:
-                st.caption("Patterns are descriptive observations, not proof that an indicator caused an outcome.")
-        else:
-            st.info("No supported indicator fields are available for comparison in these outcomes.")
-        if not liquidity_field:
-            st.info("No explicit liquidity or 24h quote-volume field was found. Liquidity is not inferred from short-term volume ratios.")
-    else:
-        st.info("No usable winner/loser outcome records are available in the current archive yet.")
-
-with tab_scanner:
-    # 2. Scanner intelligence — report only fields and event types actually present in the logs.
-    st.header("Scanner activity & diagnostics")
-    unique_symbols = combined["symbol"].nunique() if "symbol" in combined.columns else 0
-    alert_records = len(alerts)
-    latest_eval_for_summary = latest_outcomes(outcomes)
-    unique_evaluated = len(latest_eval_for_summary)
-    other_log_events = len(generic)
-    metric_row([
-        ("Distinct symbols in logs", f"{unique_symbols:,}" if unique_symbols else "Not logged"),
-        ("Other logged events", f"{other_log_events:,}"),
-        ("Alert records", f"{alert_records:,}"),
-        ("Unique evaluated alert IDs", f"{unique_evaluated:,}"),
-    ])
-    event_mix = generic.get("event_type", pd.Series(dtype="object")).fillna("unknown").astype(str).value_counts()
-    st.subheader("Other event types in the logs")
-    if not event_mix.empty:
-        event_mix_df = event_mix.rename_axis("Event type").reset_index(name="Records")
-        st.dataframe(event_mix_df, use_container_width=True, hide_index=True)
-    else:
-        st.info("No separate scanner/diagnostic event types were found in today's logs.")
-
-    st.subheader("Recorded diagnostic stages and reasons")
-    diagnostic_parts = []
-    if "diagnostic.stage" in generic.columns:
-        stages = generic["diagnostic.stage"].dropna().astype(str).value_counts()
-        if not stages.empty:
-            diagnostic_parts.append(stages.rename_axis("Stage").reset_index(name="Records"))
-    if "diagnostic.reason" in generic.columns:
-        reasons = generic["diagnostic.reason"].dropna().astype(str).value_counts().head(12)
-        if not reasons.empty:
-            diagnostic_parts.append(reasons.rename_axis("Reason").reset_index(name="Records"))
-    if diagnostic_parts:
-        for part in diagnostic_parts:
-            st.dataframe(part, use_container_width=True, hide_index=True)
-    else:
-        st.info("Stage/rejection breakdown is not available in the current log fields. No funnel counts are inferred.")
-
-    st.caption("These are log-derived counts, not a scanner funnel. Distinct symbols in the logs do not necessarily equal symbols scanned. A true scanned → qualified → rejected → alerted funnel requires explicit scanner-stage events.")
-
-with tab_detectors:
-    # 3. Detector performance
-    st.header("Detector performance")
-    perf_all = detector_summary(valid)
-    if not perf_all.empty:
-        show = perf_all[["detector", "alerts", "wins", "losses", "neutral", "win_rate", "avg_return", "median_return"]].copy()
-        show["win_rate"] = show["win_rate"].map(lambda x: f"{x:.1f}%")
-        show["avg_return"] = show["avg_return"].map(lambda x: f"{x:+.2f}%")
-        show["median_return"] = show["median_return"].map(lambda x: f"{x:+.2f}%")
-        show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
-        st.dataframe(show, use_container_width=True, hide_index=True)
-        chart = perf_all.sort_values("avg_return", ascending=True)
-        fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
-                     text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
-                     color="avg_return", color_continuous_scale=["#ff5b63", "#315b7a", "#39e75f"],
-                     labels={"avg_return": "Average final return", "detector": ""})
-        fig.update_layout(template="plotly_dark", height=max(220, 65 * len(chart)),
-                          margin=dict(l=8, r=12, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
-                          plot_bgcolor="rgba(0,0,0,0)", coloraxis_showscale=False,
-                          font=dict(color="#edf5ff"))
-        fig.update_traces(textposition="outside", cliponaxis=False)
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-    else:
-        st.info("No closed tracked-alert returns are available yet. Scanner skips and diagnostics are excluded from detector performance.")
-
-with tab_coins:
-    # 4. Coin intelligence
-    st.header("Coin intelligence")
-    coin_source = valid.copy() if not valid.empty and "symbol" in valid else pd.DataFrame()
-    if not coin_source.empty:
-        coin_source["final_percent"] = pd.to_numeric(coin_source["final_percent"], errors="coerce")
-        coin_source = coin_source.dropna(subset=["symbol", "final_percent"])
-        coin_rank = coin_source.groupby("symbol").agg(
-            alerts=("final_percent", "size"),
-            avg_return=("final_percent", "mean"),
-            median_return=("final_percent", "median"),
+    # Rank symbols from closed tracked-alert records; do not invent symbol-level results.
+    if closed_count and "symbol" in valid.columns:
+        symbol_data = valid.copy()
+        symbol_data["final_percent"] = pd.to_numeric(symbol_data["final_percent"], errors="coerce")
+        symbol_data = symbol_data.dropna(subset=["symbol", "final_percent"])
+        symbol_rank = symbol_data.groupby("symbol").agg(
+            signals=("final_percent", "size"),
             wins=("final_percent", lambda x: int((x >= 1.0).sum())),
-            losses=("final_percent", lambda x: int((x <= -0.5).sum())),
-            neutral=("final_percent", lambda x: int(((x > -0.5) & (x < 1.0)).sum())),
+            losses=("final_percent", lambda x: int((x <= -.5).sum())),
+            median_pnl=("final_percent", "median"),
+            avg_score=("signal_score", "mean") if "signal_score" in symbol_data else ("final_percent", "size"),
         ).reset_index()
-        decisive_by_coin = coin_rank["wins"] + coin_rank["losses"]
-        coin_rank["win_rate"] = (coin_rank["wins"] / decisive_by_coin.replace(0, pd.NA) * 100)
-        coin_rank = coin_rank.sort_values(["avg_return", "alerts"], ascending=[False, False])
-        display = coin_rank.rename(columns={
-            "symbol": "Coin", "alerts": "Alerts", "wins": "Wins", "losses": "Losses",
-            "neutral": "Neutral", "win_rate": "Decisive win rate",
-            "avg_return": "Average return", "median_return": "Median return"
-        }).copy()
-        display["Decisive win rate"] = display["Decisive win rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-        display["Average return"] = display["Average return"].map(lambda x: f"{x:+.2f}%")
-        display["Median return"] = display["Median return"].map(lambda x: f"{x:+.2f}%")
-        st.dataframe(display, use_container_width=True, hide_index=True)
-        st.caption("Closed tracked alerts only. Sample size is shown for every coin; small samples should not be treated as reliable rankings.")
+        symbol_rank["decisive"] = symbol_rank["wins"] + symbol_rank["losses"]
+        symbol_rank["win_rate"] = (symbol_rank["wins"] / symbol_rank["decisive"].replace(0, pd.NA) * 100)
+        symbol_rank = symbol_rank.sort_values(["win_rate", "signals"], ascending=[False, False], na_position="last")
+        symbol_rank["Signal"] = "MIXED"
+        if "detector" in symbol_data:
+            direction = symbol_data.groupby("symbol")["detector"].agg(lambda x: str(x.mode().iloc[0]) if not x.mode().empty else "MIXED")
+            symbol_rank["Signal"] = symbol_rank["symbol"].map(direction).fillna("MIXED")
+        symbol_rank_view = symbol_rank.head(8).rename(columns={
+            "symbol":"Symbol", "signals":"Signals", "wins":"Wins", "losses":"Losses",
+            "win_rate":"Win Rate", "median_pnl":"Median P&L", "avg_score":"Score (Avg)"
+        })
+        symbol_rank_view = symbol_rank_view[["Symbol","Signal","Signals","Wins","Losses","Win Rate","Median P&L","Score (Avg)"]]
+        symbol_rank_view["Win Rate"] = symbol_rank_view["Win Rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+        symbol_rank_view["Median P&L"] = symbol_rank_view["Median P&L"].map(lambda x: f"{x:+.2f}%")
+        symbol_rank_view["Score (Avg)"] = symbol_rank_view["Score (Avg)"].map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
     else:
-        st.info("Coin rankings will appear when closed tracked-alert records include symbol and final return.")
+        symbol_rank_view = pd.DataFrame()
 
-with tab_quality:
-    # 5. Signal quality — use the dedicated outcome stream, keeping it separate from alert_record.
-    st.header("Signal quality")
-    latest_eval = latest_outcomes(outcomes)
-    if not latest_eval.empty:
-        for col in ["original_volume_5m", "original_rsi_15m", "original_score", "pnl_percent", "mfe_percent", "mae_percent"]:
-            if col in latest_eval:
-                latest_eval[col] = pd.to_numeric(latest_eval[col], errors="coerce")
-        counts = outcome_counts(latest_eval)
-        metric_row([
-            ("Evaluated alert IDs", f'{counts["alerts"]:,}'),
-            ("Wins", f'{counts["wins"]:,}'),
-            ("Losses", f'{counts["losses"]:,}'),
-            ("Neutral", f'{counts["neutral"]:,}'),
-            ("Decisive win rate", f'{counts["decisive_rate"]:.1f}%' if pd.notna(counts["decisive_rate"]) else "—"),
-        ])
-        quality_cols = [c for c in ["original_score", "original_volume_5m", "original_rsi_15m", "pnl_percent", "mfe_percent", "mae_percent"] if c in latest_eval]
-        if quality_cols:
-            display_cols = [c for c in ["symbol", "result"] + quality_cols if c in latest_eval]
-            quality_view = latest_eval[display_cols].copy()
-            quality_view = quality_view.rename(columns={
-                "symbol": "Coin", "result": "Outcome", "original_score": "Original score",
-                "original_volume_5m": "5m volume ratio", "original_rsi_15m": "15m RSI",
-                "pnl_percent": "P&L", "mfe_percent": "Max favourable move", "mae_percent": "Max adverse move"
-            })
-            sort_col = "P&L" if "P&L" in quality_view.columns else None
-            if sort_col:
-                quality_view = quality_view.sort_values(sort_col, ascending=False, na_position="last")
-            st.dataframe(quality_view, use_container_width=True, hide_index=True)
-        st.caption("Latest evaluation per alert ID. Outcome records are analyzed separately and are not merged with detector alert records.")
-    else:
-        st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
+    # Header status and compact KPI row.
+    st.markdown(
+        f'<div class="top-status"><span class="status-live"></span><span><b>LAST ARCHIVE UPDATE</b><br>{latest_alert_label}</span>'
+        f'<span class="status-divider"></span><span class="archive-meta">{len(combined):,} events · {archive_status["loaded"]:,} R2 files</span></div>',
+        unsafe_allow_html=True
+    )
+    kpis = [
+        ("◉", "Total Signals", f"{len(alerts):,}", "cyan"),
+        ("🏆", "Win Rate", f"{win_rate:.1f}%" if pd.notna(win_rate) else "—", "green"),
+        ("◎", "Decisive Win Rate", f"{decisive_rate:.1f}%" if pd.notna(decisive_rate) else "—", "green"),
+        ("↗", "Winners", f"{wins:,}", "green"),
+        ("↘", "Losers", f"{losses:,}", "red"),
+    ]
+    kpi_html = "".join(
+        f'<div class="kpi-card {tone}"><div class="kpi-icon">{icon}</div><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>'
+        for icon,label,value,tone in kpis
+    )
+    st.markdown(f'<div class="kpi-grid">{kpi_html}</div>', unsafe_allow_html=True)
 
-with tab_logs:
-    # 6. Latest R2 log — explicit latest file metadata and useful activity, not raw telemetry.
-    st.header("Latest log file")
-    if latest_name:
-        st.markdown(f"**Newest file currently present in Cloudflare R2:** {latest_name}")
-        if pd.notna(latest_time):
-            archive_age_hours = (pd.Timestamp.now(tz="UTC") - latest_time).total_seconds() / 3600
-            if archive_age_hours > 12:
-                st.error(f"R2 ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
-            else:
-                st.success(f"R2 freshness: newest event is {archive_age_hours:.1f} hours old.")
-        file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
-        file_records = len(latest_rows)
-        metric_row([
-            ("Records in latest file", f"{file_records:,}"),
-            ("Distinct symbols", f'{latest_df["symbol"].nunique() if "symbol" in latest_df else 0:,}'),
-            ("Latest event time", latest_time_pak),
-            ("File size", f'{next((x["size"] for x in archive_status["objects"] if x["name"] == latest_name), 0) / 1024:.1f} KB'),
-        ])
-        if not file_event_counts.empty:
-            st.caption("Event mix: " + " · ".join(f"{k}: {v:,}" for k, v in file_event_counts.head(6).items()))
-        if "diagnostic.reason" in latest_df:
-            reasons = latest_df["diagnostic.reason"].dropna().astype(str).value_counts().head(5)
-            if not reasons.empty:
-                st.caption("Most common gate/skip reasons: " + " · ".join(f"{k} ({v})" for k, v in reasons.items()))
-        if not latest_df.empty and "_ts" in latest_df:
-            latest_activity = latest_df.sort_values("_ts", ascending=False, na_position="last")
-            useful = latest_activity[
-                ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
-                    ["volume_cache_snapshot", "signal_quality_snapshot"]
-                )
-            ].head(12)
-            cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in useful]
-            if not useful.empty and cols:
-                st.dataframe(useful[cols], use_container_width=True, hide_index=True)
-            else:
-                st.info("The newest file contains telemetry snapshots but no alert/rejection events to display.")
-    else:
-        st.info("No archive log file is available.")
-
-    # Recent actual alerts, capped to 20 rows.
-    st.header("Recent alerts")
-    if not alerts.empty:
-        recent = alerts.sort_values("_ts", ascending=False, na_position="last").head(20).copy()
-        cols = [c for c in ["timestamp", "symbol", "detector", "alert_type", "signal_score", "final_percent", "peak_percent", "worst_percent", "exit_reason"] if c in recent]
-        if cols:
-            st.dataframe(recent[cols], use_container_width=True, hide_index=True)
+    left, right = st.columns([.95, 2.05], gap="medium")
+    with left:
+        st.markdown('<div class="panel-title">Outcome Mix</div>', unsafe_allow_html=True)
+        if closed_count:
+            mix = pd.DataFrame({"Outcome":["Winners","Losers","Neutral"],"Signals":[wins,losses,neutral]})
+            fig = px.pie(mix, names="Outcome", values="Signals", hole=.68,
+                         color="Outcome", color_discrete_map={"Winners":"#39e75f","Losers":"#ff5b63","Neutral":"#b8c7d9"})
+            fig.update_traces(textinfo="none", marker=dict(line=dict(color="#07111e",width=3)),
+                              hovertemplate="%{label}: %{value} (%{percent})<extra></extra>")
+            fig.update_layout(template="plotly_dark",height=250,showlegend=True,
+                              margin=dict(l=0,r=0,t=0,b=0),paper_bgcolor="rgba(0,0,0,0)",
+                              plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#eaf5ff",size=12),
+                              legend=dict(orientation="v",y=.5,x=1.0,xanchor="left"))
+            st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False})
         else:
-            st.info("Alert records exist, but do not contain the expected display fields.")
-    else:
-        st.info("No alert_record events are present in the loaded archive.")
+            st.info("Outcome mix appears when tracked alerts close.")
+        st.markdown('<div class="panel-title">Key Metrics (Averages)</div>', unsafe_allow_html=True)
+        metric_lookup = {row["Group"]: row for _,row in summary_df.iterrows()} if not summary_df.empty else {}
+        for label in ["15m RSI","24h Quote Vol","5m volume ratio"]:
+            w = metric_lookup.get("Winners",{}).get(label,float("nan"))
+            l = metric_lookup.get("Losers",{}).get(label,float("nan"))
+            if pd.notna(w) or pd.notna(l):
+                if label == "24h Quote Vol":
+                    wv,lv=compact_volume(w),compact_volume(l)
+                elif label == "5m volume ratio":
+                    wv,lv=(f"{w:.2f}×" if pd.notna(w) else "—"),(f"{l:.2f}×" if pd.notna(l) else "—")
+                else:
+                    wv,lv=(f"{w:.1f}" if pd.notna(w) else "—"),(f"{l:.1f}" if pd.notna(l) else "—")
+                st.markdown(f'<div class="mini-metric"><span>{label}</span><b class="positive">{wv} (W)</b><i>|</i><b class="negative">{lv} (L)</b></div>',unsafe_allow_html=True)
 
-    # Keep raw detail available only when deliberately requested.
-    with st.expander("Advanced diagnostics · raw data and exports"):
-        st.caption("Open only when investigating a specific issue. This section is intentionally hidden by default.")
-        st.write(f"Archive files loaded: {archive_status['loaded']:,} · Read errors: {len(archive_status['errors']):,} · Parse errors: {len(errors):,}")
-        if errors:
-            st.dataframe(pd.DataFrame(errors).head(100), use_container_width=True, hide_index=True)
-        event_counts = combined.get("event_type", pd.Series("unknown", index=combined.index)).fillna("unknown").value_counts()
-        st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
-        csv_data = combined.drop(columns=["_ts"], errors="ignore").to_csv(index=False).encode("utf-8")
-        st.download_button("Download all parsed records (CSV)", csv_data, "pingr_parsed_records.csv", "text/csv")
-        jsonl_out = "\\n".join(json.dumps(r, default=str) for r in combined_rows)
-        st.download_button("Download deduplicated records (JSONL)", jsonl_out, "pingr_deduplicated.jsonl", "application/json")
+    with right:
+        st.markdown('<div class="panel-title">Signal Performance <span class="panel-sub">(by Win Rate)</span></div>', unsafe_allow_html=True)
+        if not symbol_rank_view.empty:
+            st.dataframe(symbol_rank_view,use_container_width=True,hide_index=True,
+                         column_config={"Win Rate":st.column_config.TextColumn("Win Rate"),
+                                        "Median P&L":st.column_config.TextColumn("Median P&L")})
+        else:
+            st.info("Symbol performance appears when closed tracked-alert records include symbols.")
+        st.caption("Ranked from closed tracked-alert records. Win rate excludes neutral outcomes.")
+
+    # Compact insight strip from actual sample observations.
+    insight_items=[]
+    if not symbol_rank.empty if closed_count and "symbol" in valid.columns else False:
+        best=symbol_rank.iloc[0]
+        if pd.notna(best["win_rate"]):
+            insight_items.append(("TOP PERFORMER",str(best["symbol"]),f'{best["win_rate"]:.1f}% win rate',"green"))
+        most=symbol_rank.sort_values("signals",ascending=False).iloc[0]
+        insight_items.append(("MOST ACTIVE",str(most["symbol"]),f'{int(most["signals"])} signals',"cyan"))
+    if pd.notna(decisive_rate):
+        insight_items.append(("DECISIVE WIN RATE",f"{decisive_rate:.1f}%","Wins / (wins + losses)","green"))
+    if insight_items:
+        cells="".join(f'<div class="insight-cell"><small>{a}</small><b>{b}</b><span>{c}</span></div>' for a,b,c,_ in insight_items)
+        st.markdown(f'<div class="insight-strip"><div class="insight-title">✦ KEY INSIGHTS</div>{cells}</div>',unsafe_allow_html=True)
+
+    st.caption("Win = final return ≥ +1%; loss = ≤ −0.5%; neutral = between those thresholds. Decisive win rate excludes neutral outcomes. Figures use current loaded R2 archive records.")
+if active_page == "Patterns":
+        st.header("Patterns · winning conditions")
+        st.caption("A focused workspace for comparing the conditions behind winning and losing alerts. All figures come from the latest evaluated outcome per alert ID.")
+
+        if not classified.empty and "symbol" in classified.columns:
+            winner_n = int(classified["result"].eq("win").sum())
+            loser_n = int(classified["result"].eq("loss").sum())
+            neutral_n = int(classified["result"].eq("neutral").sum())
+            metric_row([
+                ("Winning alerts", f"{winner_n:,}"),
+                ("Losing alerts", f"{loser_n:,}"),
+                ("Neutral alerts", f"{neutral_n:,}"),
+            ])
+
+            st.subheader("Outcome profiles")
+            st.caption("Median indicator readings at alert time. Green identifies winners; red identifies losers.")
+            if not summary_df.empty:
+                profile_view = summary_df.rename(columns={"Group":"Outcome"}).copy()
+                profile_style = profile_view.style
+                if "Outcome" in profile_view.columns:
+                    profile_style = profile_style.map(
+                        lambda value: "color:#39e75f;font-weight:800" if value == "Winners"
+                        else ("color:#ff5b63;font-weight:800" if value == "Losers" else "color:#9bb2c7;font-weight:800"),
+                        subset=["Outcome"]
+                    )
+                st.dataframe(profile_style, use_container_width=True, hide_index=True)
+
+            st.subheader("Winning and losing symbols")
+            symbol_cols = [col for col in [
+                "symbol", "result", "pnl_percent", "original_score",
+                "original_volume_5m", "original_rsi_15m", "original_price_change_5m"
+            ] if col in classified.columns]
+            if liquidity_field and liquidity_field in classified.columns and liquidity_field not in symbol_cols:
+                symbol_cols.append(liquidity_field)
+            if macd_fields:
+                symbol_cols.extend(field for field, _ in macd_fields if field in classified.columns and field not in symbol_cols)
+            symbol_view = classified[symbol_cols].copy().rename(columns={
+                "symbol":"Symbol", "result":"Outcome", "pnl_percent":"P&L %",
+                "original_score":"Signal score", "original_volume_5m":"5m volume ratio",
+                "original_rsi_15m":"15m RSI", "original_price_change_5m":"5m price change %",
+            })
+            if liquidity_field and liquidity_field in classified.columns:
+                symbol_view = symbol_view.rename(columns={liquidity_field:"Liquidity / 24h volume"})
+            for field, label in macd_fields:
+                if field in symbol_view.columns:
+                    symbol_view = symbol_view.rename(columns={field:label})
+            symbol_tabs = st.tabs(["Winners", "Losers"])
+            for pane, result_name in zip(symbol_tabs, ["win", "loss"]):
+                with pane:
+                    subset = symbol_view[classified["result"].eq(result_name)].head(20)
+                    if subset.empty:
+                        st.info(f"No {result_name} outcomes in the current archive.")
+                    else:
+                        formats = {}
+                        for col in subset.columns:
+                            if col in ("P&L %", "5m price change %"):
+                                formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):+.2f}%"
+                            elif col == "15m RSI":
+                                formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.1f}"
+                            elif col == "5m volume ratio":
+                                formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.2f}×"
+                            elif col == "Liquidity / 24h volume":
+                                formats[col] = compact_volume
+                        st.dataframe(subset.style.format(formats, na_rep="—"), use_container_width=True, hide_index=True)
+
+            st.divider()
+            st.subheader("Indicator patterns")
+            st.caption("Ranges show the 25th–75th percentile, with the median in parentheses. Sample counts are shown separately.")
+            if pattern_rows:
+                pattern_detail = pd.DataFrame(pattern_rows).rename(columns={
+                    "Winners n":"Winner sample", "Losers n":"Loser sample"
+                })
+                pattern_style = pattern_detail.style
+                if "Winners" in pattern_detail.columns:
+                    pattern_style = pattern_style.set_properties(subset=["Winners"], **{"color":"#39e75f","font-weight":"700"})
+                if "Losers" in pattern_detail.columns:
+                    pattern_style = pattern_style.set_properties(subset=["Losers"], **{"color":"#ff5b63","font-weight":"700"})
+                st.dataframe(pattern_style, use_container_width=True, hide_index=True)
+                if min(winner_n, loser_n) < 5:
+                    st.warning(f"Early read only: {winner_n} winners and {loser_n} losers. These ranges are unstable with small samples and are not trading thresholds.")
+                else:
+                    st.caption("Patterns are descriptive observations, not proof that an indicator caused an outcome.")
+            else:
+                st.info("No supported indicator fields are available for comparison in these outcomes.")
+            if not liquidity_field:
+                st.info("No explicit liquidity or 24h quote-volume field was found. Liquidity is not inferred from short-term volume ratios.")
+        else:
+            st.info("No usable winner/loser outcome records are available in the current archive yet.")
+
+if active_page == "Scanner intelligence":
+        # 2. Scanner intelligence — report only fields and event types actually present in the logs.
+        st.header("Scanner activity & diagnostics")
+        unique_symbols = combined["symbol"].nunique() if "symbol" in combined.columns else 0
+        alert_records = len(alerts)
+        latest_eval_for_summary = latest_outcomes(outcomes)
+        unique_evaluated = len(latest_eval_for_summary)
+        other_log_events = len(generic)
+        metric_row([
+            ("Distinct symbols in logs", f"{unique_symbols:,}" if unique_symbols else "Not logged"),
+            ("Other logged events", f"{other_log_events:,}"),
+            ("Alert records", f"{alert_records:,}"),
+            ("Unique evaluated alert IDs", f"{unique_evaluated:,}"),
+        ])
+        event_mix = generic.get("event_type", pd.Series(dtype="object")).fillna("unknown").astype(str).value_counts()
+        st.subheader("Other event types in the logs")
+        if not event_mix.empty:
+            event_mix_df = event_mix.rename_axis("Event type").reset_index(name="Records")
+            st.dataframe(event_mix_df, use_container_width=True, hide_index=True)
+        else:
+            st.info("No separate scanner/diagnostic event types were found in today's logs.")
+
+        st.subheader("Recorded diagnostic stages and reasons")
+        diagnostic_parts = []
+        if "diagnostic.stage" in generic.columns:
+            stages = generic["diagnostic.stage"].dropna().astype(str).value_counts()
+            if not stages.empty:
+                diagnostic_parts.append(stages.rename_axis("Stage").reset_index(name="Records"))
+        if "diagnostic.reason" in generic.columns:
+            reasons = generic["diagnostic.reason"].dropna().astype(str).value_counts().head(12)
+            if not reasons.empty:
+                diagnostic_parts.append(reasons.rename_axis("Reason").reset_index(name="Records"))
+        if diagnostic_parts:
+            for part in diagnostic_parts:
+                st.dataframe(part, use_container_width=True, hide_index=True)
+        else:
+            st.info("Stage/rejection breakdown is not available in the current log fields. No funnel counts are inferred.")
+
+        st.caption("These are log-derived counts, not a scanner funnel. Distinct symbols in the logs do not necessarily equal symbols scanned. A true scanned → qualified → rejected → alerted funnel requires explicit scanner-stage events.")
+
+if active_page == "Detector performance":
+        # 3. Detector performance
+        st.header("Detector performance")
+        perf_all = detector_summary(valid)
+        if not perf_all.empty:
+            show = perf_all[["detector", "alerts", "wins", "losses", "neutral", "win_rate", "avg_return", "median_return"]].copy()
+            show["win_rate"] = show["win_rate"].map(lambda x: f"{x:.1f}%")
+            show["avg_return"] = show["avg_return"].map(lambda x: f"{x:+.2f}%")
+            show["median_return"] = show["median_return"].map(lambda x: f"{x:+.2f}%")
+            show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
+            st.dataframe(show, use_container_width=True, hide_index=True)
+            chart = perf_all.sort_values("avg_return", ascending=True)
+            fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
+                         text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
+                         color="avg_return", color_continuous_scale=["#ff5b63", "#315b7a", "#39e75f"],
+                         labels={"avg_return": "Average final return", "detector": ""})
+            fig.update_layout(template="plotly_dark", height=max(220, 65 * len(chart)),
+                              margin=dict(l=8, r=12, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
+                              plot_bgcolor="rgba(0,0,0,0)", coloraxis_showscale=False,
+                              font=dict(color="#edf5ff"))
+            fig.update_traces(textposition="outside", cliponaxis=False)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        else:
+            st.info("No closed tracked-alert returns are available yet. Scanner skips and diagnostics are excluded from detector performance.")
+
+if active_page == "Coin intelligence":
+        # 4. Coin intelligence
+        st.header("Coin intelligence")
+        coin_source = valid.copy() if not valid.empty and "symbol" in valid else pd.DataFrame()
+        if not coin_source.empty:
+            coin_source["final_percent"] = pd.to_numeric(coin_source["final_percent"], errors="coerce")
+            coin_source = coin_source.dropna(subset=["symbol", "final_percent"])
+            coin_rank = coin_source.groupby("symbol").agg(
+                alerts=("final_percent", "size"),
+                avg_return=("final_percent", "mean"),
+                median_return=("final_percent", "median"),
+                wins=("final_percent", lambda x: int((x >= 1.0).sum())),
+                losses=("final_percent", lambda x: int((x <= -0.5).sum())),
+                neutral=("final_percent", lambda x: int(((x > -0.5) & (x < 1.0)).sum())),
+            ).reset_index()
+            decisive_by_coin = coin_rank["wins"] + coin_rank["losses"]
+            coin_rank["win_rate"] = (coin_rank["wins"] / decisive_by_coin.replace(0, pd.NA) * 100)
+            coin_rank = coin_rank.sort_values(["avg_return", "alerts"], ascending=[False, False])
+            display = coin_rank.rename(columns={
+                "symbol": "Coin", "alerts": "Alerts", "wins": "Wins", "losses": "Losses",
+                "neutral": "Neutral", "win_rate": "Decisive win rate",
+                "avg_return": "Average return", "median_return": "Median return"
+            }).copy()
+            display["Decisive win rate"] = display["Decisive win rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+            display["Average return"] = display["Average return"].map(lambda x: f"{x:+.2f}%")
+            display["Median return"] = display["Median return"].map(lambda x: f"{x:+.2f}%")
+            st.dataframe(display, use_container_width=True, hide_index=True)
+            st.caption("Closed tracked alerts only. Sample size is shown for every coin; small samples should not be treated as reliable rankings.")
+        else:
+            st.info("Coin rankings will appear when closed tracked-alert records include symbol and final return.")
+
+if active_page == "Signal quality":
+        # 5. Signal quality — use the dedicated outcome stream, keeping it separate from alert_record.
+        st.header("Signal quality")
+        latest_eval = latest_outcomes(outcomes)
+        if not latest_eval.empty:
+            for col in ["original_volume_5m", "original_rsi_15m", "original_score", "pnl_percent", "mfe_percent", "mae_percent"]:
+                if col in latest_eval:
+                    latest_eval[col] = pd.to_numeric(latest_eval[col], errors="coerce")
+            counts = outcome_counts(latest_eval)
+            metric_row([
+                ("Evaluated alert IDs", f'{counts["alerts"]:,}'),
+                ("Wins", f'{counts["wins"]:,}'),
+                ("Losses", f'{counts["losses"]:,}'),
+                ("Neutral", f'{counts["neutral"]:,}'),
+                ("Decisive win rate", f'{counts["decisive_rate"]:.1f}%' if pd.notna(counts["decisive_rate"]) else "—"),
+            ])
+            quality_cols = [c for c in ["original_score", "original_volume_5m", "original_rsi_15m", "pnl_percent", "mfe_percent", "mae_percent"] if c in latest_eval]
+            if quality_cols:
+                display_cols = [c for c in ["symbol", "result"] + quality_cols if c in latest_eval]
+                quality_view = latest_eval[display_cols].copy()
+                quality_view = quality_view.rename(columns={
+                    "symbol": "Coin", "result": "Outcome", "original_score": "Original score",
+                    "original_volume_5m": "5m volume ratio", "original_rsi_15m": "15m RSI",
+                    "pnl_percent": "P&L", "mfe_percent": "Max favourable move", "mae_percent": "Max adverse move"
+                })
+                sort_col = "P&L" if "P&L" in quality_view.columns else None
+                if sort_col:
+                    quality_view = quality_view.sort_values(sort_col, ascending=False, na_position="last")
+                st.dataframe(quality_view, use_container_width=True, hide_index=True)
+            st.caption("Latest evaluation per alert ID. Outcome records are analyzed separately and are not merged with detector alert records.")
+        else:
+            st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
+
+if active_page == "Logs & diagnostics":
+        # 6. Latest R2 log — explicit latest file metadata and useful activity, not raw telemetry.
+        st.header("Latest log file")
+        if latest_name:
+            st.markdown(f"**Newest file currently present in Cloudflare R2:** {latest_name}")
+            if pd.notna(latest_time):
+                archive_age_hours = (pd.Timestamp.now(tz="UTC") - latest_time).total_seconds() / 3600
+                if archive_age_hours > 12:
+                    st.error(f"R2 ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
+                else:
+                    st.success(f"R2 freshness: newest event is {archive_age_hours:.1f} hours old.")
+            file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
+            file_records = len(latest_rows)
+            metric_row([
+                ("Records in latest file", f"{file_records:,}"),
+                ("Distinct symbols", f'{latest_df["symbol"].nunique() if "symbol" in latest_df else 0:,}'),
+                ("Latest event time", latest_time_pak),
+                ("File size", f'{next((x["size"] for x in archive_status["objects"] if x["name"] == latest_name), 0) / 1024:.1f} KB'),
+            ])
+            if not file_event_counts.empty:
+                st.caption("Event mix: " + " · ".join(f"{k}: {v:,}" for k, v in file_event_counts.head(6).items()))
+            if "diagnostic.reason" in latest_df:
+                reasons = latest_df["diagnostic.reason"].dropna().astype(str).value_counts().head(5)
+                if not reasons.empty:
+                    st.caption("Most common gate/skip reasons: " + " · ".join(f"{k} ({v})" for k, v in reasons.items()))
+            if not latest_df.empty and "_ts" in latest_df:
+                latest_activity = latest_df.sort_values("_ts", ascending=False, na_position="last")
+                useful = latest_activity[
+                    ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
+                        ["volume_cache_snapshot", "signal_quality_snapshot"]
+                    )
+                ].head(12)
+                cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in useful]
+                if not useful.empty and cols:
+                    st.dataframe(useful[cols], use_container_width=True, hide_index=True)
+                else:
+                    st.info("The newest file contains telemetry snapshots but no alert/rejection events to display.")
+        else:
+            st.info("No archive log file is available.")
+
+        # Recent actual alerts, capped to 20 rows.
+        st.header("Recent alerts")
+        if not alerts.empty:
+            recent = alerts.sort_values("_ts", ascending=False, na_position="last").head(20).copy()
+            cols = [c for c in ["timestamp", "symbol", "detector", "alert_type", "signal_score", "final_percent", "peak_percent", "worst_percent", "exit_reason"] if c in recent]
+            if cols:
+                st.dataframe(recent[cols], use_container_width=True, hide_index=True)
+            else:
+                st.info("Alert records exist, but do not contain the expected display fields.")
+        else:
+            st.info("No alert_record events are present in the loaded archive.")
+
+        # Keep raw detail available only when deliberately requested.
+        with st.expander("Advanced diagnostics · raw data and exports"):
+            st.caption("Open only when investigating a specific issue. This section is intentionally hidden by default.")
+            st.write(f"Archive files loaded: {archive_status['loaded']:,} · Read errors: {len(archive_status['errors']):,} · Parse errors: {len(errors):,}")
+            if errors:
+                st.dataframe(pd.DataFrame(errors).head(100), use_container_width=True, hide_index=True)
+            event_counts = combined.get("event_type", pd.Series("unknown", index=combined.index)).fillna("unknown").value_counts()
+            st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
+            csv_data = combined.drop(columns=["_ts"], errors="ignore").to_csv(index=False).encode("utf-8")
+            st.download_button("Download all parsed records (CSV)", csv_data, "pingr_parsed_records.csv", "text/csv")
+            jsonl_out = "\\n".join(json.dumps(r, default=str) for r in combined_rows)
+            st.download_button("Download deduplicated records (JSONL)", jsonl_out, "pingr_deduplicated.jsonl", "application/json")
 
 st.divider()
 st.caption("PINGR ANALYTICS · Read-only analytics · R2 archive and Pingr engine are not modified by this dashboard.")
