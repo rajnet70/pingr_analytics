@@ -783,66 +783,44 @@ if active_page == "Overview":
         st.info("Symbol performance appears when closed tracked-alert records include symbols.")
     st.caption("Ranked from closed tracked-alert records. Win rate excludes neutral outcomes.")
 
-    # Balanced second row: chart and indicator comparison share the available width.
-    outcome_col, metrics_col = st.columns([1, 1], gap="large")
-    with outcome_col:
-        st.markdown('<div class="panel-title">Outcome Mix</div>', unsafe_allow_html=True)
-        if closed_count:
-            mix = pd.DataFrame({"Outcome":["Winners","Losers","Neutral"],"Signals":[wins,losses,neutral]})
-            fig = px.pie(
-                mix, names="Outcome", values="Signals", hole=.70,
-                color="Outcome",
-                color_discrete_map={"Winners":"#39e75f","Losers":"#ff5b63","Neutral":"#b8c7d9"},
-            )
-            fig.update_traces(
-                textinfo="none",
-                marker=dict(line=dict(color="#07111e",width=3)),
-                hovertemplate="%{label}: %{value} (%{percent})<extra></extra>",
-            )
-            fig.update_layout(
-                template="plotly_dark", height=285, showlegend=True,
-                margin=dict(l=8,r=8,t=8,b=8),
-                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-                font=dict(color="#eaf5ff",size=12),
-                legend=dict(orientation="h",y=-.06,x=.5,xanchor="center",yanchor="top"),
-            )
-            st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False})
+    # Winner/loser indicator comparison takes the full width; Outcome Mix removed.
+    st.markdown('<div class="panel-title">Winner vs Loser · Key Metrics</div>', unsafe_allow_html=True)
+    metric_lookup = {row["Group"]: row for _,row in summary_df.iterrows()} if not summary_df.empty else {}
+    metric_specs = [
+        ("Signal score", "number"),
+        ("15m RSI", "number"),
+        ("5m volume ratio", "multiple"),
+        ("5m price change %", "percent"),
+        ("MACD 5m bullish %", "percent"),
+        ("MACD 15m bullish %", "percent"),
+        ("MACD 1h bullish %", "percent"),
+    ]
+    for label, kind in metric_specs:
+        w = metric_lookup.get("Winners",{}).get(label,float("nan"))
+        l = metric_lookup.get("Losers",{}).get(label,float("nan"))
+        if pd.isna(w) and pd.isna(l):
+            continue
+        if kind == "multiple":
+            wv,lv=(f"{w:.2f}×" if pd.notna(w) else "—"),(f"{l:.2f}×" if pd.notna(l) else "—")
+        elif kind == "percent":
+            wv,lv=(f"{w:.1f}%" if pd.notna(w) else "—"),(f"{l:.1f}%" if pd.notna(l) else "—")
         else:
-            st.info("Outcome mix appears when tracked alerts close.")
-
-    with metrics_col:
-        st.markdown('<div class="panel-title">Winner vs Loser · Key Metrics</div>', unsafe_allow_html=True)
-        metric_lookup = {row["Group"]: row for _,row in summary_df.iterrows()} if not summary_df.empty else {}
-        metric_specs = [
-            ("15m RSI","number"),
-            ("5m volume ratio","multiple"),
-            ("5m price change %","percent"),
-        ]
-        for label, kind in metric_specs:
-            w = metric_lookup.get("Winners",{}).get(label,float("nan"))
-            l = metric_lookup.get("Losers",{}).get(label,float("nan"))
-            if pd.isna(w) and pd.isna(l):
-                continue
-            if kind == "multiple":
-                wv,lv=(f"{w:.2f}×" if pd.notna(w) else "—"),(f"{l:.2f}×" if pd.notna(l) else "—")
-            elif kind == "percent":
-                wv,lv=(f"{w:+.2f}%" if pd.notna(w) else "—"),(f"{l:+.2f}%" if pd.notna(l) else "—")
-            else:
-                wv,lv=(f"{w:.1f}" if pd.notna(w) else "—"),(f"{l:.1f}" if pd.notna(l) else "—")
-            st.markdown(
-                f'<div class="mini-metric"><span>{label}</span><b class="positive">{wv} (W)</b><i>|</i><b class="negative">{lv} (L)</b></div>',
-                unsafe_allow_html=True,
-            )
-        for bound in ("Min", "Max"):
-            label = f"24h Quote Vol {bound}"
-            w = metric_lookup.get("Winners",{}).get(label,float("nan"))
-            l = metric_lookup.get("Losers",{}).get(label,float("nan"))
-            if pd.isna(w) and pd.isna(l):
-                continue
-            st.markdown(
-                f'<div class="mini-metric"><span>{label}</span><b class="positive">{compact_volume(w)} (W)</b><i>|</i><b class="negative">{compact_volume(l)} (L)</b></div>',
-                unsafe_allow_html=True,
-            )
+            wv,lv=(f"{w:.1f}" if pd.notna(w) else "—"),(f"{l:.1f}" if pd.notna(l) else "—")
+        st.markdown(
+            f'<div class="mini-metric"><span>{label}</span><b class="positive">{wv} (W)</b><i>|</i><b class="negative">{lv} (L)</b></div>',
+            unsafe_allow_html=True,
+        )
+    for bound in ("Min", "Max"):
+        label = f"24h Quote Vol {bound}"
+        w = metric_lookup.get("Winners",{}).get(label,float("nan"))
+        l = metric_lookup.get("Losers",{}).get(label,float("nan"))
+        if pd.isna(w) and pd.isna(l):
+            continue
+        st.markdown(
+            f'<div class="mini-metric"><span>{label}</span><b class="positive">{compact_volume(w)} (W)</b><i>|</i><b class="negative">{compact_volume(l)} (L)</b></div>',
+            unsafe_allow_html=True,
+        )
+    st.caption("Values compare medians for numeric indicators and bullish share for MACD. Missing source fields are omitted; no values are inferred.")
 
     # Compact insight strip from actual sample observations.
     insight_items=[]
