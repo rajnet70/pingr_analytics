@@ -810,182 +810,119 @@ if active_page == "Overview":
 
     st.caption("Win = final return ≥ +1%; loss = ≤ −0.5%; neutral = between those thresholds. Decisive win rate excludes neutral outcomes. Figures use current loaded R2 archive records.")
 if active_page == "Patterns":
-    st.header("Patterns · winning conditions")
-    st.caption("A focused workspace for comparing the conditions behind winning and losing alerts. All figures come from the latest evaluated outcome per alert ID.")
+    st.header("Pattern intelligence")
+    st.caption("Compare the conditions recorded on winning and losing alerts, then review evidence-based ideas to validate. This page does not change scanner rules.")
 
-    if not classified.empty and "symbol" in classified.columns:
+    if not classified.empty:
         winner_n = int(classified["result"].eq("win").sum())
         loser_n = int(classified["result"].eq("loss").sum())
-        neutral_n = int(classified["result"].eq("neutral").sum())
         metric_row([
             ("Winning alerts", f"{winner_n:,}"),
             ("Losing alerts", f"{loser_n:,}"),
-            ("Neutral alerts", f"{neutral_n:,}"),
         ])
 
-        st.subheader("Outcome profiles")
-        st.caption("Median indicator readings at alert time. Green identifies winners; red identifies losers.")
-        if not summary_df.empty:
-            profile_view = summary_df.rename(columns={"Group":"Outcome"}).copy()
-            profile_style = profile_view.style
-            if "Outcome" in profile_view.columns:
-                profile_style = profile_style.map(
-                    lambda value: "color:#39e75f;font-weight:800" if value == "Winners"
-                    else ("color:#ff5b63;font-weight:800" if value == "Losers" else "color:#9bb2c7;font-weight:800"),
-                    subset=["Outcome"]
-                )
-            st.dataframe(profile_style, use_container_width=True, hide_index=True)
-
-        st.subheader("Winning and losing symbols")
-        symbol_cols = [col for col in [
-            "symbol", "result", "pnl_percent", "original_score",
-            "original_volume_5m", "original_rsi_15m", "original_price_change_5m"
-        ] if col in classified.columns]
-        if liquidity_field and liquidity_field in classified.columns and liquidity_field not in symbol_cols:
-            symbol_cols.append(liquidity_field)
-        if macd_fields:
-            symbol_cols.extend(field for field, _ in macd_fields if field in classified.columns and field not in symbol_cols)
-        symbol_view = classified[symbol_cols].copy().rename(columns={
-            "symbol":"Symbol", "result":"Outcome", "pnl_percent":"P&L %",
-            "original_score":"Signal score", "original_volume_5m":"5m volume ratio",
-            "original_rsi_15m":"15m RSI", "original_price_change_5m":"5m price change %",
-        })
-        if liquidity_field and liquidity_field in classified.columns:
-            symbol_view = symbol_view.rename(columns={liquidity_field:"Liquidity / 24h volume"})
-        for field, label in macd_fields:
-            if field in symbol_view.columns:
-                symbol_view = symbol_view.rename(columns={field:label})
-        symbol_tabs = st.tabs(["Winners", "Losers"])
-        for pane, result_name in zip(symbol_tabs, ["win", "loss"]):
-            with pane:
-                subset = symbol_view[classified["result"].eq(result_name)].head(20)
-                if subset.empty:
-                    st.info(f"No {result_name} outcomes in the current archive.")
+        pattern_cards = []
+        pattern_findings = []
+        for field, label, kind in pattern_specs:
+            if field not in classified.columns:
+                continue
+            groups = {}
+            all_values = []
+            for result_name in ("win", "loss"):
+                vals = pd.to_numeric(
+                    classified.loc[classified["result"].eq(result_name), field],
+                    errors="coerce"
+                ).dropna()
+                if not vals.empty:
+                    q1, med, q3 = vals.quantile([.25, .50, .75]).tolist()
+                    groups[result_name] = {"q1": q1, "median": med, "q3": q3, "n": len(vals)}
+                    all_values.extend(vals.tolist())
                 else:
-                    formats = {}
-                    for col in subset.columns:
-                        if col in ("P&L %", "5m price change %"):
-                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):+.2f}%"
-                        elif col == "15m RSI":
-                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.1f}"
-                        elif col == "5m volume ratio":
-                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.2f}×"
-                        elif col == "Liquidity / 24h volume":
-                            formats[col] = compact_volume
-                    st.dataframe(subset.style.format(formats, na_rep="—"), use_container_width=True, hide_index=True)
+                    groups[result_name] = None
+            if not all_values:
+                continue
 
-        st.divider()
-        st.markdown(
-            '<div class="pattern-heading"><div><div class="page-kicker">OUTCOME COMPARISON</div>'
-            '<div class="pattern-title">Indicator patterns</div><div class="pattern-subtitle">What the winning and losing alerts looked like — based on recorded outcomes.</div></div>'
-            '<div class="pattern-counts"><span class="pattern-win-count">▲ ' + str(winner_n) + ' WINNERS</span>'
-            '<span class="pattern-loss-count">▼ ' + str(loser_n) + ' LOSERS</span></div></div>',
-            unsafe_allow_html=True
-        )
-        if pattern_rows:
-            pattern_cards = []
-            for field, label, kind in pattern_specs:
-                if field not in classified.columns:
-                    continue
-                groups = {}
-                all_values = []
-                for result_name in ("win", "loss"):
-                    vals = pd.to_numeric(
-                        classified.loc[classified["result"].eq(result_name), field],
-                        errors="coerce"
-                    ).dropna()
-                    if not vals.empty:
-                        q1, med, q3 = vals.quantile([.25, .50, .75]).tolist()
-                        groups[result_name] = {"q1": q1, "median": med, "q3": q3, "n": len(vals)}
-                        all_values.extend(vals.tolist())
-                    else:
-                        groups[result_name] = None
+            def pattern_value(value):
+                if kind == "volume":
+                    return compact_volume(value)
+                if kind == "percent":
+                    return f"{value:+.2f}%"
+                if kind == "multiple":
+                    return f"{value:.2f}×"
+                return f"{value:.1f}"
 
-                if not all_values:
-                    continue
-                scale_min, scale_max = min(all_values), max(all_values)
-                scale_span = max(scale_max - scale_min, 1e-9)
-
-                def pattern_value(value):
-                    if kind == "volume":
-                        return compact_volume(value)
-                    if kind == "percent":
-                        return f"{value:+.2f}%"
-                    if kind == "multiple":
-                        return f"{value:.2f}×"
-                    return f"{value:.1f}"
-
-                def pattern_group_html(result_name, title, tone):
-                    stats = groups[result_name]
-                    if not stats:
-                        return (
-                            f'<div class="pattern-side {tone}"><div class="pattern-side-label">{title}</div>'
-                            '<div class="pattern-no-data">No recorded values</div></div>'
-                        )
-                    left = max(0, min(100, (stats["q1"] - scale_min) / scale_span * 100))
-                    right = max(left + 1.5, min(100, (stats["q3"] - scale_min) / scale_span * 100))
-                    marker = max(0, min(100, (stats["median"] - scale_min) / scale_span * 100))
-                    return (
-                        f'<div class="pattern-side {tone}"><div class="pattern-side-top"><span class="pattern-side-label">{title}</span>'
+            card_sides = []
+            for result_name, heading, tone in [("win", "WINNERS", "win"), ("loss", "LOSERS", "loss")]:
+                stats = groups[result_name]
+                if stats is None:
+                    card_sides.append(f'<div class="pattern-side {tone}"><b>{heading}</b><div class="pattern-no-data">No recorded values</div></div>')
+                else:
+                    card_sides.append(
+                        f'<div class="pattern-side {tone}"><div class="pattern-side-top"><span class="pattern-side-label">{heading}</span>'
                         f'<span class="pattern-n">n={stats["n"]}</span></div>'
                         f'<div class="pattern-median">{pattern_value(stats["median"])}</div>'
-                        f'<div class="pattern-range">{pattern_value(stats["q1"])} – {pattern_value(stats["q3"])} <span>· IQR</span></div>'
-                        f'<div class="pattern-track"><span class="pattern-iqr" style="left:{left:.1f}%;width:{max(1.5, right-left):.1f}%"></span>'
-                        f'<i class="pattern-marker" style="left:{marker:.1f}%"></i></div></div>'
+                        f'<div class="pattern-range">{pattern_value(stats["q1"])} – {pattern_value(stats["q3"])} <span>· IQR</span></div></div>'
                     )
+            pattern_cards.append(
+                '<div class="pattern-card"><div class="pattern-card-head"><span>' + label +
+                '</span><span class="pattern-card-tag">MEDIAN · IQR</span></div><div class="pattern-compare">' +
+                ''.join(card_sides) + '</div></div>'
+            )
 
-                pattern_cards.append(
-                    '<div class="pattern-card"><div class="pattern-card-head"><span>' + label + '</span>'
-                    '<span class="pattern-card-tag">25TH–75TH PERCENTILE</span></div>'
-                    '<div class="pattern-compare">'
-                    + pattern_group_html("win", "WINNERS", "win")
-                    + pattern_group_html("loss", "LOSERS", "loss")
-                    + '</div></div>'
-                )
+            win_stats, loss_stats = groups["win"], groups["loss"]
+            if win_stats and loss_stats:
+                pattern_findings.append((label, kind, win_stats, loss_stats))
 
+        st.subheader("Winning vs losing conditions")
+        if pattern_cards:
             st.markdown(
                 """<style>
-                .pattern-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:8px 0 16px}
-                .pattern-title{font-size:1.55rem;font-weight:900;letter-spacing:-.045em;color:#f2f8ff;margin-top:3px}
-                .pattern-subtitle{font-size:.82rem;color:#9bb6cb;margin-top:4px}
-                .pattern-counts{display:flex;gap:8px;flex-wrap:wrap}
-                .pattern-counts span{font-size:.65rem;font-weight:900;letter-spacing:.07em;padding:7px 10px;border-radius:999px}
-                .pattern-win-count{color:#75e4ac;background:rgba(57,231,145,.10);border:1px solid rgba(57,231,145,.28)}
-                .pattern-loss-count{color:#ff929b;background:rgba(255,91,99,.10);border:1px solid rgba(255,91,99,.28)}
                 .pattern-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-                .pattern-card{border:1px solid rgba(71,157,199,.30);border-radius:15px;padding:14px;background:linear-gradient(145deg,rgba(9,31,49,.96),rgba(4,17,31,.98));box-shadow:0 8px 24px rgba(0,0,0,.13);min-width:0}
-                .pattern-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
-                .pattern-card-head>span:first-child{font-size:.98rem;font-weight:850;color:#eef7ff}
-                .pattern-card-tag{font-size:.56rem;letter-spacing:.08em;color:#7f9eb5;border:1px solid rgba(127,158,181,.22);border-radius:999px;padding:4px 7px;white-space:nowrap}
+                .pattern-card{border:1px solid rgba(71,157,199,.30);border-radius:15px;padding:14px;background:linear-gradient(145deg,rgba(9,31,49,.96),rgba(4,17,31,.98));min-width:0}
+                .pattern-card-head{display:flex;justify-content:space-between;gap:8px;margin-bottom:12px}
+                .pattern-card-head>span:first-child{font-size:.95rem;font-weight:850;color:#eef7ff}
+                .pattern-card-tag{font-size:.58rem;color:#8ca9bf;letter-spacing:.07em}
                 .pattern-compare{display:grid;grid-template-columns:1fr 1fr;gap:9px}
                 .pattern-side{border-radius:11px;padding:10px;min-width:0;background:rgba(255,255,255,.025)}
                 .pattern-side.win{border:1px solid rgba(57,231,145,.20)}
                 .pattern-side.loss{border:1px solid rgba(255,91,99,.20)}
-                .pattern-side-top{display:flex;justify-content:space-between;align-items:center;gap:5px}
+                .pattern-side-top{display:flex;justify-content:space-between;gap:5px}
                 .pattern-side-label{font-size:.61rem;letter-spacing:.09em;font-weight:900}
                 .win .pattern-side-label{color:#75e4ac}.loss .pattern-side-label{color:#ff929b}
                 .pattern-n{font-size:.61rem;color:#819bb0}
-                .pattern-median{font-size:1.28rem;line-height:1.35;font-weight:900;color:#f4f9ff;margin-top:5px;white-space:nowrap}
-                .pattern-range{font-size:.68rem;color:#a8bfd1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+                .pattern-median{font-size:1.25rem;font-weight:900;color:#f4f9ff;margin-top:6px}
+                .pattern-range{font-size:.68rem;color:#a8bfd1;margin-top:3px}
                 .pattern-range span{color:#718ca2;font-size:.61rem}
-                .pattern-track{height:5px;border-radius:99px;background:rgba(132,163,185,.14);position:relative;margin-top:12px;overflow:visible}
-                .pattern-iqr{position:absolute;height:5px;border-radius:99px;top:0}
-                .win .pattern-iqr{background:#39c98a}.loss .pattern-iqr{background:#e66d7a}
-                .pattern-marker{position:absolute;top:-3px;width:3px;height:11px;border-radius:2px;background:#f3f8ff;transform:translateX(-50%);box-shadow:0 0 5px rgba(255,255,255,.35)}
                 .pattern-no-data{font-size:.78rem;color:#8299ad;padding:12px 0}
-                @media(max-width:760px){.pattern-heading{align-items:flex-start;flex-direction:column}.pattern-grid{grid-template-columns:1fr}.pattern-card{padding:12px}.pattern-median{font-size:1.15rem}}
-                </style>
-                <div class="pattern-grid">""" + "".join(pattern_cards) + "</div>",
+                @media(max-width:760px){.pattern-grid{grid-template-columns:1fr}.pattern-card{padding:12px}}
+                </style><div class="pattern-grid">""" + "".join(pattern_cards) + "</div>",
                 unsafe_allow_html=True
             )
-            if min(winner_n, loser_n) < 5:
-                st.warning(f"Early read only: {winner_n} winners and {loser_n} losers. These ranges are unstable with small samples and are not trading thresholds.")
-            else:
-                st.caption("Patterns are descriptive observations, not proof that an indicator caused an outcome.")
         else:
-            st.info("No supported indicator fields are available for comparison in these outcomes.")
-        if not liquidity_field:
-            st.info("No explicit liquidity or 24h quote-volume field was found. Liquidity is not inferred from short-term volume ratios.")
+            st.info("No supported numeric indicator fields are available in these outcomes.")
+
+        st.subheader("Recommendations")
+        st.caption("These are investigation suggestions from the current sample, not trading instructions or automatic scanner changes.")
+        recommendations = []
+        for label, kind, win_stats, loss_stats in pattern_findings:
+            wn, ln = win_stats["n"], loss_stats["n"]
+            if min(wn, ln) < 10:
+                recommendations.append((1, label, f"Collect more evidence for {label}: only {wn} winning and {ln} losing records have usable values. No recommendation is made yet."))
+                continue
+            wmed, lmed = win_stats["median"], loss_stats["median"]
+            if pd.isclose(wmed, lmed):
+                recommendations.append((2, label, f"{label} medians are similar for winners and losers. Do not prioritize this indicator as a separator based on this sample."))
+            elif wmed > lmed:
+                recommendations.append((0, label, f"Winners show a higher median {label} than losers ({pattern_value(wmed)} vs {pattern_value(lmed)}). Review this as a candidate confirmation feature; validate on later alerts before changing any rule."))
+            else:
+                recommendations.append((0, label, f"Winners show a lower median {label} than losers ({pattern_value(wmed)} vs {pattern_value(lmed)}). Review whether lower readings are associated with better outcomes; validate on later alerts before changing any rule."))
+
+        for priority, label, message in sorted(recommendations, key=lambda item: (item[0], item[1]))[:5]:
+            st.markdown(f"**{label}** — {message}")
+        if min(winner_n, loser_n) < 10:
+            st.warning(f"Small sample: {winner_n} winners and {loser_n} losers. Treat all comparisons as exploratory.")
+        else:
+            st.caption("A difference in medians is an association, not proof of predictive edge. Recheck it against future, unseen signals.")
     else:
         st.info("No usable winner/loser outcome records are available in the current archive yet.")
 
