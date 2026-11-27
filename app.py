@@ -142,7 +142,8 @@ def load_archive():
     }
 
 st.sidebar.header("Live Cloudflare R2 archive")
-st.sidebar.caption(f"Source: Cloudflare R2 · today only: {datetime.now(ZoneInfo(\"Asia/Karachi\")).strftime(\"%d %b %Y\")} PKT")
+today_label = datetime.now(ZoneInfo("Asia/Karachi")).strftime("%d %b %Y")
+st.sidebar.caption(f"Source: Cloudflare R2 · today only: {today_label} PKT")
 if st.sidebar.button("Refresh archive now", use_container_width=True):
     st.cache_data.clear()
 try:
