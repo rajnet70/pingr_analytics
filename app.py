@@ -537,9 +537,6 @@ st.markdown(
     f'<div class="topline-right"><span class="live-pill"><i></i> R2 CONNECTED</span><span class="top-cycle">2-HOUR ARCHIVE CYCLE</span></div></div>',
     unsafe_allow_html=True
 )
-if active_page == "Overview":
-    st.markdown('<div class="page-kicker">01 / COMMAND CENTRE</div><div class="page-heading">Signal Intelligence</div><div class="page-subheading">Performance, patterns and insights from Pingr signal archives.</div>', unsafe_allow_html=True)
-
     closed_count = len(valid)
     wins = int((valid["final_percent"] >= 1.0).sum()) if closed_count else 0
     losses = int((valid["final_percent"] <= -0.5).sum()) if closed_count else 0
@@ -688,6 +685,10 @@ if active_page == "Overview":
         symbol_rank_view["Score (Avg)"] = symbol_rank_view["Score (Avg)"].map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
     else:
         symbol_rank_view = pd.DataFrame()
+
+
+if active_page == "Overview":
+    st.markdown('<div class="page-kicker">01 / COMMAND CENTRE</div><div class="page-heading">Signal Intelligence</div><div class="page-subheading">Performance, patterns and insights from Pingr signal archives.</div>', unsafe_allow_html=True)
 
     # Header status and compact KPI row.
     st.markdown(
