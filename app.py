@@ -19,7 +19,7 @@ st_autorefresh(interval=7200000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
-:root{--bg:#05080f;--panel:#0b1627;--line:rgba(66,184,244,.20);--muted:#91a9c1;--text:#eef7ff;--cyan:#42b8f4;--blue:#168bd0;--ice:#91d7f5;--green:#55c7a5;--red:#f07888}
+:root{--bg:#05080f;--panel:#0b1627;--line:rgba(66,184,244,.20);--muted:#91a9c1;--text:#eef7ff;--cyan:#42b8f4;--blue:#168bd0;--ice:#91d7f5;--green:#39e75f;--red:#ff5b63}
 .stApp{background:radial-gradient(ellipse at 50% -12%,rgba(20,117,183,.18),transparent 42%),linear-gradient(180deg,#05080f 0%,#07111e 52%,#050a13 100%);color:var(--text)}
 .stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.09;background-image:linear-gradient(rgba(66,184,244,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(66,184,244,.07) 1px,transparent 1px);background-size:52px 52px;mask-image:linear-gradient(to bottom,black,transparent 75%)}
 .block-container{max-width:1480px;padding:1.1rem 2rem 3rem;position:relative}
@@ -627,8 +627,8 @@ with tab_overview:
             st.markdown("""
             <style>
             .outcome-card{border:1px solid rgba(66,184,244,.22);border-radius:16px;padding:15px 17px;margin:9px 0;background:linear-gradient(110deg,rgba(12,31,51,.96),rgba(7,18,32,.96));}
-            .outcome-card.win{border-left:4px solid #55c7a5}
-            .outcome-card.loss{border-left:4px solid #f07888}
+            .outcome-card.win{border-left:4px solid #39e75f}
+            .outcome-card.loss{border-left:4px solid #ff5b63}
             .outcome-card.neutral{border-left:4px solid #7893aa}
             .outcome-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;color:#edf7ff;font-weight:850;font-size:1rem}
             .outcome-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
@@ -641,7 +641,7 @@ with tab_overview:
             for _, card in summary_df.iterrows():
                 group_name = str(card["Group"])
                 css_group = {"Winners":"win","Losers":"loss","Neutral":"neutral"}.get(group_name,"neutral")
-                dot_color = {"win":"#55c7a5","loss":"#f07888","neutral":"#7893aa"}[css_group]
+                dot_color = {"win":"#39e75f","loss":"#ff5b63","neutral":"#7893aa"}[css_group]
                 metrics_html = [("Alerts", f'{int(card["Alerts"]):,}')]
                 for col in summary_df.columns:
                     if col in ("Group", "Alerts") or pd.isna(card[col]):
@@ -753,7 +753,12 @@ with tab_overview:
                 pattern_view = pd.DataFrame(pattern_rows).rename(columns={
                     "Winners n": "Winner sample", "Losers n": "Loser sample"
                 })
-                st.dataframe(pattern_view, use_container_width=True, hide_index=True)
+                pattern_styled = pattern_view.style
+                if "Winners" in pattern_view.columns:
+                    pattern_styled = pattern_styled.set_properties(subset=["Winners"], **{"color":"#39e75f","font-weight":"700"})
+                if "Losers" in pattern_view.columns:
+                    pattern_styled = pattern_styled.set_properties(subset=["Losers"], **{"color":"#ff5b63","font-weight":"700"})
+                st.dataframe(pattern_styled, use_container_width=True, hide_index=True)
                 st.caption(
                     f"Based on {winner_n} winning and {loser_n} losing evaluated alerts. "
                     "Ranges show the middle 50% with the median; open Patterns for the detailed read."
@@ -776,7 +781,7 @@ with tab_overview:
     if closed_count:
         outcome_mix = pd.DataFrame({"Outcome": ["Wins", "Losses", "Neutral"], "Alerts": [wins, losses, neutral]})
         outcome_fig = px.pie(outcome_mix, names="Outcome", values="Alerts", hole=.68,
-                             color="Outcome", color_discrete_map={"Wins":"#55c7a5","Losses":"#f07888","Neutral":"#7893aa"})
+                             color="Outcome", color_discrete_map={"Wins":"#39e75f","Losses":"#ff5b63","Neutral":"#7893aa"})
         outcome_fig.update_traces(textinfo="percent", textposition="inside",
                                   marker=dict(line=dict(color="#07111e", width=3)),
                                   hovertemplate="%{label}: %{value}<extra></extra>")
@@ -815,7 +820,12 @@ with tab_patterns:
             "Winners n": "Winner sample", "Losers n": "Loser sample"
         })
         st.subheader("Indicator comparison")
-        st.dataframe(pattern_detail, use_container_width=True, hide_index=True)
+        pattern_detail_styled = pattern_detail.style
+        if "Winners" in pattern_detail.columns:
+            pattern_detail_styled = pattern_detail_styled.set_properties(subset=["Winners"], **{"color":"#39e75f","font-weight":"700"})
+        if "Losers" in pattern_detail.columns:
+            pattern_detail_styled = pattern_detail_styled.set_properties(subset=["Losers"], **{"color":"#ff5b63","font-weight":"700"})
+        st.dataframe(pattern_detail_styled, use_container_width=True, hide_index=True)
         st.subheader("How to read this")
         st.markdown(
             "- **Winners / Losers:** observed 25th–75th percentile ranges, with the median in parentheses.\n"
@@ -888,7 +898,7 @@ with tab_detectors:
         chart = perf_all.sort_values("avg_return", ascending=True)
         fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
                      text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
-                     color="avg_return", color_continuous_scale=["#f07888", "#315b7a", "#55c7a5"],
+                     color="avg_return", color_continuous_scale=["#ff5b63", "#315b7a", "#39e75f"],
                      labels={"avg_return": "Average final return", "detector": ""})
         fig.update_layout(template="plotly_dark", height=max(220, 65 * len(chart)),
                           margin=dict(l=8, r=12, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
