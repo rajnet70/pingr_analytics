@@ -470,7 +470,7 @@ st.markdown('<div class="pingr-subtitle">Decision-focused performance · Detecto
 
 # Keep the archive controls compact and out of the main analysis.
 st.sidebar.header("Data connection")
-st.sidebar.caption("Private GitHub archive · pingr-log-archive")
+st.sidebar.caption("Cloudflare R2 · bucket pingr · prefix pingr/logs/")
 st.sidebar.metric("Log files loaded", f'{archive_status["loaded"]:,}')
 st.sidebar.caption(f'Newest file in archive: {archive_status["updated"]}')
 if st.sidebar.button("Refresh latest data", use_container_width=True):
@@ -594,7 +594,7 @@ if latest_name:
         ("Records in latest file", f"{file_records:,}"),
         ("Distinct symbols", f'{latest_df["symbol"].nunique() if "symbol" in latest_df else 0:,}'),
         ("Latest event time", latest_time_pak),
-        ("File size", f'{next((x["size"] for x in github_archive_index() if x["name"] == "pingr-archive__" + latest_name), 0) / 1024:.1f} KB'),
+        ("File size", f'{next((x["size"] for x in archive_status["objects"] if x["name"] == latest_name), 0) / 1024:.1f} KB'),
     ])
     if not file_event_counts.empty:
         st.caption("Event mix: " + " · ".join(f"{k}: {v:,}" for k, v in file_event_counts.head(6).items()))
