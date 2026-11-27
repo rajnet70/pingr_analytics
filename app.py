@@ -700,6 +700,60 @@ with tab_overview:
                             elif col == "5m volume":
                                 table_format[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.2f}×"
                         st.dataframe(subset.style.format(table_format, na_rep="—"), use_container_width=True, hide_index=True)
+
+            # Patterns are calculated from actual winner/loser outcomes in the
+            # currently loaded archive. Use IQR (25th–75th percentile), not
+            # min/max, so one outlier does not define a supposed winning range.
+            st.divider()
+            st.subheader("Patterns · winning conditions")
+            st.caption("Observed middle 50% ranges for winners compared with losers. These are descriptive patterns, not trading rules.")
+            pattern_specs = [
+                ("original_rsi_15m", "15m RSI", "number"),
+                ("original_volume_5m", "5m volume ratio", "multiple"),
+                ("original_score", "Signal score", "number"),
+                ("original_price_change_5m", "5m price change", "percent"),
+            ]
+            if liquidity_field:
+                pattern_specs.insert(1, (liquidity_field, "24h liquidity / quote volume", "volume"))
+            pattern_rows = []
+            for field, label, kind in pattern_specs:
+                if field not in classified.columns:
+                    continue
+                row = {"Pattern": label}
+                for result_name, prefix in [("win", "Winners"), ("loss", "Losers")]:
+                    values = pd.to_numeric(
+                        classified.loc[classified["result"].eq(result_name), field],
+                        errors="coerce"
+                    ).dropna()
+                    if values.empty:
+                        row[prefix] = "No data"
+                        continue
+                    low, median, high = values.quantile([0.25, 0.50, 0.75]).tolist()
+                    if kind == "volume":
+                        row[prefix] = f"{compact_volume(low)}–{compact_volume(high)} (med {compact_volume(median)})"
+                    elif kind == "percent":
+                        row[prefix] = f"{low:+.2f}%–{high:+.2f}% (med {median:+.2f}%)"
+                    elif kind == "multiple":
+                        row[prefix] = f"{low:.2f}×–{high:.2f}× (med {median:.2f}×)"
+                    else:
+                        row[prefix] = f"{low:.1f}–{high:.1f} (med {median:.1f})"
+                    row[prefix + " n"] = len(values)
+                pattern_rows.append(row)
+
+            if pattern_rows:
+                patterns_df = pd.DataFrame(pattern_rows)
+                st.dataframe(patterns_df, use_container_width=True, hide_index=True)
+                winner_n = int(classified["result"].eq("win").sum())
+                loser_n = int(classified["result"].eq("loss").sum())
+                if min(winner_n, loser_n) < 5:
+                    st.warning(
+                        f"Early read only: {winner_n} winners and {loser_n} losers. "
+                        "Ranges will become more meaningful as the sample grows; avoid treating them as thresholds."
+                    )
+                else:
+                    st.caption(f"Based on {winner_n} winning and {loser_n} losing outcomes in the current archive.")
+            else:
+                st.info("No supported indicator fields are available to calculate patterns yet.")
         else:
             st.info("No final win/loss/neutral outcomes are available yet.")
         if not liquidity_field:
