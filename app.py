@@ -1055,8 +1055,44 @@ if active_page == "Patterns":
 
     tab_all, tab_normal, tab_pullback = st.tabs(["Consolidated", "Normal Alerts", "Pullback"])
     with tab_all:
-        st.caption("All classified alert outcomes, including Pullback.")
-        render_pattern_analysis(classified, "all")
+        st.caption("All classified alert outcomes, including Pullback. The breakdown below uses the recorded detector label for each alert.")
+        render_pattern_analysis(pattern_data, "all")
+
+        st.subheader("Consolidated results by alert type")
+        if detector_field and not pattern_data.empty:
+            by_type = pattern_data.copy()
+            by_type["_result"] = by_type["result"].astype(str).str.lower()
+            by_type["_detector_label"] = by_type[detector_field].fillna("Unknown").astype(str).str.strip()
+            by_type.loc[by_type["_detector_label"].eq(""), "_detector_label"] = "Unknown"
+            rows = []
+            for detector_name, group in by_type.groupby("_detector_label", dropna=False):
+                w = int(group["_result"].eq("win").sum())
+                l = int(group["_result"].eq("loss").sum())
+                n = int(group["_result"].eq("neutral").sum())
+                row = {
+                    "Alert type": detector_name,
+                    "Evaluated": len(group),
+                    "Wins": w,
+                    "Losses": l,
+                    "Neutral": n,
+                    "Decisive win rate": f"{w / (w + l) * 100:.1f}%" if w + l else "—",
+                }
+                if "pnl_percent" in group:
+                    pnl = pd.to_numeric(group["pnl_percent"], errors="coerce")
+                    row["Average P&L"] = f"{pnl.mean():+.2f}%" if pnl.notna().any() else "—"
+                    row["Median P&L"] = f"{pnl.median():+.2f}%" if pnl.notna().any() else "—"
+                rows.append(row)
+            if rows:
+                st.dataframe(pd.DataFrame(rows).sort_values("Evaluated", ascending=False), use_container_width=True, hide_index=True)
+                st.caption("Decisive win rate excludes neutral outcomes. Small alert-type samples are descriptive only.")
+                st.subheader("Patterns within each alert type")
+                for detector_name, group in by_type.groupby("_detector_label", dropna=False):
+                    with st.expander(f"{detector_name} · {len(group)} evaluated alerts"):
+                        render_pattern_analysis(group, "type")
+            else:
+                st.info("No detector-labelled outcome groups are available.")
+        else:
+            st.warning("The consolidated outcome patterns are available, but a reliable detector label could not be matched to these outcome IDs. Alert-type comparisons are withheld rather than guessed.")
     with tab_normal:
         st.caption("All classified alerts except records explicitly labelled Pullback.")
         if detector_field:
