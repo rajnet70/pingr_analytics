@@ -887,7 +887,7 @@ if active_page == "Patterns":
     # Enrich outcome records with detector labels from the corresponding alert record
     # only when the outcome stream does not already contain a usable detector field.
     pattern_data = classified.copy()
-    detector_candidates = ["detector", "alert_type", "signal_type", "strategy", "source"]
+    detector_candidates = ["detector", "alert_type", "signal_type", "strategy"]
     detector_field = next((name for name in detector_candidates if name in pattern_data.columns), None)
     if detector_field is None and not alerts.empty and {"alert_id", "detector"}.issubset(alerts.columns) and "alert_id" in pattern_data.columns:
         detector_map = alerts.dropna(subset=["alert_id"]).drop_duplicates("alert_id", keep="last")[["alert_id", "detector"]]
