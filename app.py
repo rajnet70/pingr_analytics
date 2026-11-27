@@ -160,43 +160,78 @@ def r2_archive_index():
     archives.sort(key=lambda item: (item.get("uploaded") or "", item["key"]))
     return archives, last_run
 
-@st.cache_data(ttl=300, max_entries=40, show_spinner=False)
-def r2_archive_file(key, size, uploaded):
-    response = requests.get(
-        R2_FILE_URL,
-        params={"key": key},
-        timeout=(15, 180)
-    )
-    response.raise_for_status()
-    return response.content
-
 def load_archive():
+    # Return only the paginated object index. File contents are fetched and parsed
+    # sequentially below so multiple large decompressed archives are never resident
+    # in Streamlit memory at the same time.
     objects, last_run = r2_archive_index()
-    loaded, errors = [], []
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        jobs = {
-            pool.submit(r2_archive_file, item["key"], item["size"], item.get("uploaded")): item
-            for item in objects
-        }
-        for job in as_completed(jobs):
-            item = jobs[job]
-            try:
-                content = job.result()
-                if content:
-                    loaded.append((item["name"], content))
-            except Exception as exc:
-                errors.append(f'{item["key"]}: {type(exc).__name__}: {exc}')
-
-    loaded.sort(key=lambda item: item[0])
     latest = max((item.get("uploaded") or item["name"] for item in objects), default="Not available")
-    return loaded, {
+    return objects, {
         "files": len(objects),
-        "loaded": len(loaded),
-        "errors": errors,
+        "loaded": 0,
+        "errors": [],
         "updated": latest,
         "last_sync": last_run,
         "objects": objects
     }
+
+def parse_r2_archives(objects):
+    per_file = {}
+    all_records = []
+    errors = []
+    seen_global = set()
+    duplicate_count = 0
+    loaded_count = 0
+    latest_name = None
+    latest_rows = []
+
+    for item in objects:
+        rows = []
+        try:
+            response = requests.get(
+                R2_FILE_URL,
+                params={"key": item["key"]},
+                timeout=(15, 180),
+                stream=True
+            )
+            response.raise_for_status()
+            # Worker response is JSONL. Iterate lines from the response body,
+            # parse each record, then release the response before next object.
+            for line_no, raw_line in enumerate(response.iter_lines(), 1):
+                if not raw_line:
+                    continue
+                try:
+                    obj = json.loads(raw_line.decode("utf-8-sig", errors="replace"))
+                    if not isinstance(obj, dict):
+                        raise ValueError("JSON line is not an object")
+                    fingerprint = hashlib.sha256(
+                        json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str).encode()
+                    ).hexdigest()
+                    if fingerprint in seen_global:
+                        duplicate_count += 1
+                        continue
+                    seen_global.add(fingerprint)
+                    record = dict(obj)
+                    record["_source_file"] = item["name"]
+                    record["_line"] = line_no
+                    all_records.append(record)
+                    rows.append(record)
+                except Exception as exc:
+                    errors.append({"file": item["name"], "line": line_no, "error": str(exc)})
+            response.close()
+            loaded_count += 1
+            latest_name = item["name"]
+            latest_rows = rows
+        except Exception as exc:
+            errors.append({"file": item["name"], "line": 0, "error": f"{type(exc).__name__}: {exc}"})
+            try:
+                response.close()
+            except Exception:
+                pass
+
+    if latest_name is not None:
+        per_file[latest_name] = latest_rows
+    return per_file, all_records, errors, duplicate_count, loaded_count
 
 today_label = datetime.now(ZoneInfo("Asia/Karachi")).strftime("%d %b %Y")
 control_left, control_right = st.columns([1, 5])
@@ -212,16 +247,12 @@ with control_right:
         unsafe_allow_html=True
     )
 try:
-    with st.spinner("Reading Pingr snapshots directly from Cloudflare R2…"):
-        archive_files, archive_status = load_archive()
+    with st.spinner("Reading the R2 archive index…"):
+        archive_objects, archive_status = load_archive()
 except Exception as exc:
-    st.error(f"Could not read the Cloudflare R2 archive: {type(exc).__name__}: {exc}")
-    st.info("Check that the deployed archive Worker exposes /dashboard/index and /dashboard/file.")
+    st.error(f"Could not read the Cloudflare R2 archive index: {type(exc).__name__}: {exc}")
+    st.info("Check that the archive Worker exposes /dashboard/index.")
     st.stop()
-uploads = [ArchiveUpload(name, content) for name, content in archive_files]
-if archive_status["errors"]:
-    with st.expander(f'{len(archive_status["errors"])} R2 object(s) could not be read'):
-        st.write(archive_status["errors"])
 
 
 def parse_files(files):
@@ -498,11 +529,17 @@ def synopsis_observations(alerts, generic):
 
 
 
-if not uploads:
-    st.warning("No readable JSONL log files were found in today's R2 archive yet.")
+if not archive_objects:
+    st.warning("No compressed JSONL log files were found in the R2 archive.")
     st.stop()
 
-per_file, combined_rows, errors, duplicate_count = parse_files(uploads)
+with st.spinner(f"Processing {len(archive_objects):,} R2 archive files sequentially…"):
+    per_file, combined_rows, errors, duplicate_count, loaded_count = parse_r2_archives(archive_objects)
+archive_status["loaded"] = loaded_count
+archive_status["errors"] = errors
+if errors:
+    with st.expander(f'{len(errors)} R2 file/line issue(s) encountered'):
+        st.write(errors[:200])
 if not combined_rows:
     st.error("No valid JSON objects found. Check that each line contains one JSON object.")
     st.stop()
