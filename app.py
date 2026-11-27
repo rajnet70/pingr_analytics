@@ -882,70 +882,116 @@ if active_page == "Overview":
     st.caption("Win = final return ≥ +1%; loss = ≤ −0.5%; neutral = between those thresholds. Decisive win rate excludes neutral outcomes. Figures use current loaded R2 archive records.")
 if active_page == "Patterns":
     st.header("Pattern intelligence")
-    st.caption("Compare the conditions recorded on winning and losing alerts, then review evidence-based ideas to validate. This page does not change scanner rules.")
+    st.caption("Explore what separates successful and unsuccessful signals. Use these findings to evaluate Pingr improvements; no scanner rules are changed here.")
 
-    if not classified.empty:
-        winner_n = int(classified["result"].eq("win").sum())
-        loser_n = int(classified["result"].eq("loss").sum())
+    # Enrich outcome records with detector labels from the corresponding alert record
+    # only when the outcome stream does not already contain a usable detector field.
+    pattern_data = classified.copy()
+    detector_candidates = ["detector", "alert_type", "signal_type", "strategy", "source"]
+    detector_field = next((name for name in detector_candidates if name in pattern_data.columns), None)
+    if detector_field is None and not alerts.empty and {"alert_id", "detector"}.issubset(alerts.columns) and "alert_id" in pattern_data.columns:
+        detector_map = alerts.dropna(subset=["alert_id"]).drop_duplicates("alert_id", keep="last")[["alert_id", "detector"]]
+        pattern_data = pattern_data.merge(detector_map, on="alert_id", how="left", validate="many_to_one")
+        detector_field = "detector"
+
+    if detector_field:
+        pattern_data["_pattern_type"] = pattern_data[detector_field].fillna("").astype(str).str.lower().map(
+            lambda value: "pullback" if "pullback" in value else "normal"
+        )
+        pullback_data = pattern_data[pattern_data["_pattern_type"].eq("pullback")].copy()
+        normal_data = pattern_data[pattern_data["_pattern_type"].eq("normal")].copy()
+    else:
+        pullback_data = pd.DataFrame()
+        normal_data = pd.DataFrame()
+
+    def render_pattern_analysis(frame, mode):
+        if frame.empty:
+            if mode == "pullback":
+                st.info("No Pullback outcome records could be identified in the current archive. The Pullback tab needs a detector/type label on the outcome or matching alert record.")
+            elif mode == "normal":
+                st.info("No classifiable normal-alert outcome records are available.")
+            else:
+                st.info("No usable winner/loser outcome records are available in the current archive.")
+            return
+
+        frame = frame[frame["result"].astype(str).str.lower().isin(["win", "loss", "neutral"])].copy()
+        if frame.empty:
+            st.info("No classified outcomes are available for this group.")
+            return
+
+        wins_here = int(frame["result"].astype(str).str.lower().eq("win").sum())
+        losses_here = int(frame["result"].astype(str).str.lower().eq("loss").sum())
+        neutral_here = int(frame["result"].astype(str).str.lower().eq("neutral").sum())
         metric_row([
-            ("Winning alerts", f"{winner_n:,}"),
-            ("Losing alerts", f"{loser_n:,}"),
+            ("Evaluated alerts", f"{len(frame):,}"),
+            ("Winners", f"{wins_here:,}"),
+            ("Losers", f"{losses_here:,}"),
+            ("Neutral", f"{neutral_here:,}"),
+            ("Decisive win rate", f"{wins_here / (wins_here + losses_here) * 100:.1f}%" if wins_here + losses_here else "—"),
         ])
 
-        pattern_cards = []
-        pattern_findings = []
-        for field, label, kind in pattern_specs:
-            if field not in classified.columns:
+        specs = list(pattern_specs)
+        if mode == "pullback":
+            # Add Pullback-specific outcome/management measures only when recorded.
+            for field, label, kind in [
+                ("mfe_percent", "Maximum favourable excursion", "percent"),
+                ("mae_percent", "Maximum adverse excursion", "percent"),
+                ("pnl_percent", "Recorded P&L", "percent"),
+                ("dist_ma20", "Distance from MA20", "percent"),
+                ("pullback", "Pullback depth", "number"),
+            ]:
+                if field in frame.columns and all(existing[0] != field for existing in specs):
+                    specs.append((field, label, kind))
+
+        def display_value(value, kind):
+            if pd.isna(value):
+                return "—"
+            if kind == "volume":
+                return compact_volume(value)
+            if kind == "percent":
+                return f"{value:+.2f}%"
+            if kind == "multiple":
+                return f"{value:.2f}×"
+            return f"{value:.1f}"
+
+        cards, findings = [], []
+        for field, label, kind in specs:
+            if field not in frame.columns:
                 continue
             groups = {}
             all_values = []
-            for result_name in ("win", "loss"):
-                vals = pd.to_numeric(
-                    classified.loc[classified["result"].eq(result_name), field],
-                    errors="coerce"
-                ).dropna()
+            for outcome_name in ("win", "loss"):
+                vals = pd.to_numeric(frame.loc[frame["result"].astype(str).str.lower().eq(outcome_name), field], errors="coerce").dropna()
                 if not vals.empty:
                     q1, med, q3 = vals.quantile([.25, .50, .75]).tolist()
-                    groups[result_name] = {"q1": q1, "median": med, "q3": q3, "n": len(vals)}
+                    groups[outcome_name] = {"q1": q1, "median": med, "q3": q3, "n": len(vals)}
                     all_values.extend(vals.tolist())
                 else:
-                    groups[result_name] = None
+                    groups[outcome_name] = None
             if not all_values:
                 continue
 
-            def pattern_value(value):
-                if kind == "volume":
-                    return compact_volume(value)
-                if kind == "percent":
-                    return f"{value:+.2f}%"
-                if kind == "multiple":
-                    return f"{value:.2f}×"
-                return f"{value:.1f}"
-
-            card_sides = []
-            for result_name, heading, tone in [("win", "WINNERS", "win"), ("loss", "LOSERS", "loss")]:
-                stats = groups[result_name]
+            sides = []
+            for outcome_name, heading, tone in [("win", "WINNERS", "win"), ("loss", "LOSERS", "loss")]:
+                stats = groups[outcome_name]
                 if stats is None:
-                    card_sides.append(f'<div class="pattern-side {tone}"><b>{heading}</b><div class="pattern-no-data">No recorded values</div></div>')
+                    sides.append(f'<div class="pattern-side {tone}"><b>{heading}</b><div class="pattern-no-data">No recorded values</div></div>')
                 else:
-                    card_sides.append(
+                    sides.append(
                         f'<div class="pattern-side {tone}"><div class="pattern-side-top"><span class="pattern-side-label">{heading}</span>'
-                        f'<span class="pattern-n">n={stats["n"]}</span></div>'
-                        f'<div class="pattern-median">{pattern_value(stats["median"])}</div>'
-                        f'<div class="pattern-range">{pattern_value(stats["q1"])} – {pattern_value(stats["q3"])} <span>· IQR</span></div></div>'
+                        f'<span class="pattern-n">n={stats["n"]}</span></div><div class="pattern-median">{display_value(stats["median"], kind)}</div>'
+                        f'<div class="pattern-range">{display_value(stats["q1"], kind)} – {display_value(stats["q3"], kind)} <span>· IQR</span></div></div>'
                     )
-            pattern_cards.append(
+            cards.append(
                 '<div class="pattern-card"><div class="pattern-card-head"><span>' + label +
                 '</span><span class="pattern-card-tag">MEDIAN · IQR</span></div><div class="pattern-compare">' +
-                ''.join(card_sides) + '</div></div>'
+                ''.join(sides) + '</div></div>'
             )
-
-            win_stats, loss_stats = groups["win"], groups["loss"]
-            if win_stats and loss_stats:
-                pattern_findings.append((label, kind, win_stats, loss_stats))
+            if groups["win"] and groups["loss"]:
+                findings.append((label, kind, groups["win"], groups["loss"]))
 
         st.subheader("Winning vs losing conditions")
-        if pattern_cards:
+        if cards:
             st.markdown(
                 """<style>
                 .pattern-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
@@ -966,41 +1012,63 @@ if active_page == "Patterns":
                 .pattern-range span{color:#718ca2;font-size:.61rem}
                 .pattern-no-data{font-size:.78rem;color:#8299ad;padding:12px 0}
                 @media(max-width:760px){.pattern-grid{grid-template-columns:1fr}.pattern-card{padding:12px}}
-                </style><div class="pattern-grid">""" + "".join(pattern_cards) + "</div>",
+                </style><div class="pattern-grid">""" + "".join(cards) + "</div>",
                 unsafe_allow_html=True
             )
         else:
-            st.info("No supported numeric indicator fields are available in these outcomes.")
+            st.info("No supported numeric winner/loser indicator fields are available for this group.")
 
         st.subheader("Recommendations")
-        st.caption("These are investigation suggestions from the current sample, not trading instructions or automatic scanner changes.")
+        st.caption("Evidence-led investigation suggestions only. Differences are descriptive, not proof of causation.")
         recommendations = []
-        for label, kind, win_stats, loss_stats in pattern_findings:
+        for label, kind, win_stats, loss_stats in findings:
             wn, ln = win_stats["n"], loss_stats["n"]
             if min(wn, ln) < 10:
-                recommendations.append((1, label, f"Collect more evidence for {label}: only {wn} winning and {ln} losing records have usable values. No recommendation is made yet."))
+                recommendations.append((1, label, f"Collect more evidence for {label}: only {wn} winning and {ln} losing records have usable values. No rule change is justified yet."))
                 continue
             wmed, lmed = win_stats["median"], loss_stats["median"]
-            def recommendation_value(value, value_kind):
-                if value_kind == "volume": return compact_volume(value)
-                if value_kind == "percent": return f"{value:+.2f}%"
-                if value_kind == "multiple": return f"{value:.2f}×"
-                return f"{value:.1f}"
             if pd.isclose(wmed, lmed):
-                recommendations.append((2, label, f"{label} medians are similar for winners and losers. Do not prioritize this indicator as a separator based on this sample."))
+                recommendations.append((2, label, f"{label} medians are similar for winners and losers. It is not separating outcomes clearly in this sample."))
             elif wmed > lmed:
-                recommendations.append((0, label, f"Winners show a higher median {label} than losers ({recommendation_value(wmed, kind)} vs {recommendation_value(lmed, kind)}). Review this as a candidate confirmation feature; validate on later alerts before changing any rule."))
+                recommendations.append((0, label, f"Winners have a higher median {label} ({display_value(wmed, kind)} vs {display_value(lmed, kind)}). Investigate this as a possible confirmation feature; validate on future alerts."))
             else:
-                recommendations.append((0, label, f"Winners show a lower median {label} than losers ({recommendation_value(wmed, kind)} vs {recommendation_value(lmed, kind)}). Review whether lower readings are associated with better outcomes; validate on later alerts before changing any rule."))
-
-        for priority, label, message in sorted(recommendations, key=lambda item: (item[0], item[1]))[:5]:
-            st.markdown(f"**{label}** — {message}")
-        if min(winner_n, loser_n) < 10:
-            st.warning(f"Small sample: {winner_n} winners and {loser_n} losers. Treat all comparisons as exploratory.")
+                recommendations.append((0, label, f"Winners have a lower median {label} ({display_value(wmed, kind)} vs {display_value(lmed, kind)}). Investigate whether lower readings are associated with better outcomes; validate on future alerts."))
+        if recommendations:
+            for _, label, message in sorted(recommendations, key=lambda item: (item[0], item[1]))[:6]:
+                st.markdown(f"**{label}** — {message}")
         else:
-            st.caption("A difference in medians is an association, not proof of predictive edge. Recheck it against future, unseen signals.")
-    else:
-        st.info("No usable winner/loser outcome records are available in the current archive yet.")
+            st.info("There are not yet enough paired winner/loser indicator observations to generate recommendations.")
+        if min(wins_here, losses_here) < 10:
+            st.warning(f"Small sample: {wins_here} winners and {losses_here} losers. Treat these comparisons as exploratory.")
+        else:
+            st.caption("Use later, unseen alerts to check whether these patterns persist before considering scanner changes.")
+
+        if mode == "pullback":
+            st.subheader("Pullback evidence")
+            st.caption("Pullback-specific fields are displayed only when present in the archived records. Detection and confirmation stages are not inferred from outcome alone.")
+            stage_fields = [field for field in ["pullback_stage", "stage", "confirmed", "is_confirmed", "confirmation_status"] if field in frame.columns]
+            if stage_fields:
+                for field in stage_fields:
+                    st.write(f"Recorded {field}: {frame[field].fillna('Unknown').astype(str).value_counts().to_dict()}")
+            else:
+                st.info("No explicit Pullback detected/confirmed stage field was found in these outcome records.")
+
+    tab_all, tab_normal, tab_pullback = st.tabs(["Consolidated", "Normal Alerts", "Pullback"])
+    with tab_all:
+        st.caption("All classified alert outcomes, including Pullback.")
+        render_pattern_analysis(classified, "all")
+    with tab_normal:
+        st.caption("All classified alerts except records explicitly labelled Pullback.")
+        if detector_field:
+            render_pattern_analysis(normal_data, "normal")
+        else:
+            st.warning("Cannot safely separate normal alerts from Pullback because the archived outcomes do not contain a detector label and no matching alert-record mapping was available.")
+    with tab_pullback:
+        st.caption("Only records explicitly labelled Pullback; no other detector is included.")
+        if detector_field:
+            render_pattern_analysis(pullback_data, "pullback")
+        else:
+            st.warning("Cannot safely identify Pullback outcomes because the archived outcomes do not contain a detector label and no matching alert-record mapping was available.")
 
 if active_page == "Scanner intelligence":
     # 2. Scanner intelligence — report only fields and event types actually present in the logs.
