@@ -761,287 +761,287 @@ if active_page == "Overview":
 
     st.caption("Win = final return ≥ +1%; loss = ≤ −0.5%; neutral = between those thresholds. Decisive win rate excludes neutral outcomes. Figures use current loaded R2 archive records.")
 if active_page == "Patterns":
-        st.header("Patterns · winning conditions")
-        st.caption("A focused workspace for comparing the conditions behind winning and losing alerts. All figures come from the latest evaluated outcome per alert ID.")
+    st.header("Patterns · winning conditions")
+    st.caption("A focused workspace for comparing the conditions behind winning and losing alerts. All figures come from the latest evaluated outcome per alert ID.")
 
-        if not classified.empty and "symbol" in classified.columns:
-            winner_n = int(classified["result"].eq("win").sum())
-            loser_n = int(classified["result"].eq("loss").sum())
-            neutral_n = int(classified["result"].eq("neutral").sum())
-            metric_row([
-                ("Winning alerts", f"{winner_n:,}"),
-                ("Losing alerts", f"{loser_n:,}"),
-                ("Neutral alerts", f"{neutral_n:,}"),
-            ])
+    if not classified.empty and "symbol" in classified.columns:
+        winner_n = int(classified["result"].eq("win").sum())
+        loser_n = int(classified["result"].eq("loss").sum())
+        neutral_n = int(classified["result"].eq("neutral").sum())
+        metric_row([
+            ("Winning alerts", f"{winner_n:,}"),
+            ("Losing alerts", f"{loser_n:,}"),
+            ("Neutral alerts", f"{neutral_n:,}"),
+        ])
 
-            st.subheader("Outcome profiles")
-            st.caption("Median indicator readings at alert time. Green identifies winners; red identifies losers.")
-            if not summary_df.empty:
-                profile_view = summary_df.rename(columns={"Group":"Outcome"}).copy()
-                profile_style = profile_view.style
-                if "Outcome" in profile_view.columns:
-                    profile_style = profile_style.map(
-                        lambda value: "color:#39e75f;font-weight:800" if value == "Winners"
-                        else ("color:#ff5b63;font-weight:800" if value == "Losers" else "color:#9bb2c7;font-weight:800"),
-                        subset=["Outcome"]
-                    )
-                st.dataframe(profile_style, use_container_width=True, hide_index=True)
+        st.subheader("Outcome profiles")
+        st.caption("Median indicator readings at alert time. Green identifies winners; red identifies losers.")
+        if not summary_df.empty:
+            profile_view = summary_df.rename(columns={"Group":"Outcome"}).copy()
+            profile_style = profile_view.style
+            if "Outcome" in profile_view.columns:
+                profile_style = profile_style.map(
+                    lambda value: "color:#39e75f;font-weight:800" if value == "Winners"
+                    else ("color:#ff5b63;font-weight:800" if value == "Losers" else "color:#9bb2c7;font-weight:800"),
+                    subset=["Outcome"]
+                )
+            st.dataframe(profile_style, use_container_width=True, hide_index=True)
 
-            st.subheader("Winning and losing symbols")
-            symbol_cols = [col for col in [
-                "symbol", "result", "pnl_percent", "original_score",
-                "original_volume_5m", "original_rsi_15m", "original_price_change_5m"
-            ] if col in classified.columns]
-            if liquidity_field and liquidity_field in classified.columns and liquidity_field not in symbol_cols:
-                symbol_cols.append(liquidity_field)
-            if macd_fields:
-                symbol_cols.extend(field for field, _ in macd_fields if field in classified.columns and field not in symbol_cols)
-            symbol_view = classified[symbol_cols].copy().rename(columns={
-                "symbol":"Symbol", "result":"Outcome", "pnl_percent":"P&L %",
-                "original_score":"Signal score", "original_volume_5m":"5m volume ratio",
-                "original_rsi_15m":"15m RSI", "original_price_change_5m":"5m price change %",
-            })
-            if liquidity_field and liquidity_field in classified.columns:
-                symbol_view = symbol_view.rename(columns={liquidity_field:"Liquidity / 24h volume"})
-            for field, label in macd_fields:
-                if field in symbol_view.columns:
-                    symbol_view = symbol_view.rename(columns={field:label})
-            symbol_tabs = st.tabs(["Winners", "Losers"])
-            for pane, result_name in zip(symbol_tabs, ["win", "loss"]):
-                with pane:
-                    subset = symbol_view[classified["result"].eq(result_name)].head(20)
-                    if subset.empty:
-                        st.info(f"No {result_name} outcomes in the current archive.")
-                    else:
-                        formats = {}
-                        for col in subset.columns:
-                            if col in ("P&L %", "5m price change %"):
-                                formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):+.2f}%"
-                            elif col == "15m RSI":
-                                formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.1f}"
-                            elif col == "5m volume ratio":
-                                formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.2f}×"
-                            elif col == "Liquidity / 24h volume":
-                                formats[col] = compact_volume
-                        st.dataframe(subset.style.format(formats, na_rep="—"), use_container_width=True, hide_index=True)
-
-            st.divider()
-            st.subheader("Indicator patterns")
-            st.caption("Ranges show the 25th–75th percentile, with the median in parentheses. Sample counts are shown separately.")
-            if pattern_rows:
-                pattern_detail = pd.DataFrame(pattern_rows).rename(columns={
-                    "Winners n":"Winner sample", "Losers n":"Loser sample"
-                })
-                pattern_style = pattern_detail.style
-                if "Winners" in pattern_detail.columns:
-                    pattern_style = pattern_style.set_properties(subset=["Winners"], **{"color":"#39e75f","font-weight":"700"})
-                if "Losers" in pattern_detail.columns:
-                    pattern_style = pattern_style.set_properties(subset=["Losers"], **{"color":"#ff5b63","font-weight":"700"})
-                st.dataframe(pattern_style, use_container_width=True, hide_index=True)
-                if min(winner_n, loser_n) < 5:
-                    st.warning(f"Early read only: {winner_n} winners and {loser_n} losers. These ranges are unstable with small samples and are not trading thresholds.")
+        st.subheader("Winning and losing symbols")
+        symbol_cols = [col for col in [
+            "symbol", "result", "pnl_percent", "original_score",
+            "original_volume_5m", "original_rsi_15m", "original_price_change_5m"
+        ] if col in classified.columns]
+        if liquidity_field and liquidity_field in classified.columns and liquidity_field not in symbol_cols:
+            symbol_cols.append(liquidity_field)
+        if macd_fields:
+            symbol_cols.extend(field for field, _ in macd_fields if field in classified.columns and field not in symbol_cols)
+        symbol_view = classified[symbol_cols].copy().rename(columns={
+            "symbol":"Symbol", "result":"Outcome", "pnl_percent":"P&L %",
+            "original_score":"Signal score", "original_volume_5m":"5m volume ratio",
+            "original_rsi_15m":"15m RSI", "original_price_change_5m":"5m price change %",
+        })
+        if liquidity_field and liquidity_field in classified.columns:
+            symbol_view = symbol_view.rename(columns={liquidity_field:"Liquidity / 24h volume"})
+        for field, label in macd_fields:
+            if field in symbol_view.columns:
+                symbol_view = symbol_view.rename(columns={field:label})
+        symbol_tabs = st.tabs(["Winners", "Losers"])
+        for pane, result_name in zip(symbol_tabs, ["win", "loss"]):
+            with pane:
+                subset = symbol_view[classified["result"].eq(result_name)].head(20)
+                if subset.empty:
+                    st.info(f"No {result_name} outcomes in the current archive.")
                 else:
-                    st.caption("Patterns are descriptive observations, not proof that an indicator caused an outcome.")
+                    formats = {}
+                    for col in subset.columns:
+                        if col in ("P&L %", "5m price change %"):
+                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):+.2f}%"
+                        elif col == "15m RSI":
+                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.1f}"
+                        elif col == "5m volume ratio":
+                            formats[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.2f}×"
+                        elif col == "Liquidity / 24h volume":
+                            formats[col] = compact_volume
+                    st.dataframe(subset.style.format(formats, na_rep="—"), use_container_width=True, hide_index=True)
+
+        st.divider()
+        st.subheader("Indicator patterns")
+        st.caption("Ranges show the 25th–75th percentile, with the median in parentheses. Sample counts are shown separately.")
+        if pattern_rows:
+            pattern_detail = pd.DataFrame(pattern_rows).rename(columns={
+                "Winners n":"Winner sample", "Losers n":"Loser sample"
+            })
+            pattern_style = pattern_detail.style
+            if "Winners" in pattern_detail.columns:
+                pattern_style = pattern_style.set_properties(subset=["Winners"], **{"color":"#39e75f","font-weight":"700"})
+            if "Losers" in pattern_detail.columns:
+                pattern_style = pattern_style.set_properties(subset=["Losers"], **{"color":"#ff5b63","font-weight":"700"})
+            st.dataframe(pattern_style, use_container_width=True, hide_index=True)
+            if min(winner_n, loser_n) < 5:
+                st.warning(f"Early read only: {winner_n} winners and {loser_n} losers. These ranges are unstable with small samples and are not trading thresholds.")
             else:
-                st.info("No supported indicator fields are available for comparison in these outcomes.")
-            if not liquidity_field:
-                st.info("No explicit liquidity or 24h quote-volume field was found. Liquidity is not inferred from short-term volume ratios.")
+                st.caption("Patterns are descriptive observations, not proof that an indicator caused an outcome.")
         else:
-            st.info("No usable winner/loser outcome records are available in the current archive yet.")
+            st.info("No supported indicator fields are available for comparison in these outcomes.")
+        if not liquidity_field:
+            st.info("No explicit liquidity or 24h quote-volume field was found. Liquidity is not inferred from short-term volume ratios.")
+    else:
+        st.info("No usable winner/loser outcome records are available in the current archive yet.")
 
 if active_page == "Scanner intelligence":
-        # 2. Scanner intelligence — report only fields and event types actually present in the logs.
-        st.header("Scanner activity & diagnostics")
-        unique_symbols = combined["symbol"].nunique() if "symbol" in combined.columns else 0
-        alert_records = len(alerts)
-        latest_eval_for_summary = latest_outcomes(outcomes)
-        unique_evaluated = len(latest_eval_for_summary)
-        other_log_events = len(generic)
-        metric_row([
-            ("Distinct symbols in logs", f"{unique_symbols:,}" if unique_symbols else "Not logged"),
-            ("Other logged events", f"{other_log_events:,}"),
-            ("Alert records", f"{alert_records:,}"),
-            ("Unique evaluated alert IDs", f"{unique_evaluated:,}"),
-        ])
-        event_mix = generic.get("event_type", pd.Series(dtype="object")).fillna("unknown").astype(str).value_counts()
-        st.subheader("Other event types in the logs")
-        if not event_mix.empty:
-            event_mix_df = event_mix.rename_axis("Event type").reset_index(name="Records")
-            st.dataframe(event_mix_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No separate scanner/diagnostic event types were found in today's logs.")
+    # 2. Scanner intelligence — report only fields and event types actually present in the logs.
+    st.header("Scanner activity & diagnostics")
+    unique_symbols = combined["symbol"].nunique() if "symbol" in combined.columns else 0
+    alert_records = len(alerts)
+    latest_eval_for_summary = latest_outcomes(outcomes)
+    unique_evaluated = len(latest_eval_for_summary)
+    other_log_events = len(generic)
+    metric_row([
+        ("Distinct symbols in logs", f"{unique_symbols:,}" if unique_symbols else "Not logged"),
+        ("Other logged events", f"{other_log_events:,}"),
+        ("Alert records", f"{alert_records:,}"),
+        ("Unique evaluated alert IDs", f"{unique_evaluated:,}"),
+    ])
+    event_mix = generic.get("event_type", pd.Series(dtype="object")).fillna("unknown").astype(str).value_counts()
+    st.subheader("Other event types in the logs")
+    if not event_mix.empty:
+        event_mix_df = event_mix.rename_axis("Event type").reset_index(name="Records")
+        st.dataframe(event_mix_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No separate scanner/diagnostic event types were found in today's logs.")
 
-        st.subheader("Recorded diagnostic stages and reasons")
-        diagnostic_parts = []
-        if "diagnostic.stage" in generic.columns:
-            stages = generic["diagnostic.stage"].dropna().astype(str).value_counts()
-            if not stages.empty:
-                diagnostic_parts.append(stages.rename_axis("Stage").reset_index(name="Records"))
-        if "diagnostic.reason" in generic.columns:
-            reasons = generic["diagnostic.reason"].dropna().astype(str).value_counts().head(12)
-            if not reasons.empty:
-                diagnostic_parts.append(reasons.rename_axis("Reason").reset_index(name="Records"))
-        if diagnostic_parts:
-            for part in diagnostic_parts:
-                st.dataframe(part, use_container_width=True, hide_index=True)
-        else:
-            st.info("Stage/rejection breakdown is not available in the current log fields. No funnel counts are inferred.")
+    st.subheader("Recorded diagnostic stages and reasons")
+    diagnostic_parts = []
+    if "diagnostic.stage" in generic.columns:
+        stages = generic["diagnostic.stage"].dropna().astype(str).value_counts()
+        if not stages.empty:
+            diagnostic_parts.append(stages.rename_axis("Stage").reset_index(name="Records"))
+    if "diagnostic.reason" in generic.columns:
+        reasons = generic["diagnostic.reason"].dropna().astype(str).value_counts().head(12)
+        if not reasons.empty:
+            diagnostic_parts.append(reasons.rename_axis("Reason").reset_index(name="Records"))
+    if diagnostic_parts:
+        for part in diagnostic_parts:
+            st.dataframe(part, use_container_width=True, hide_index=True)
+    else:
+        st.info("Stage/rejection breakdown is not available in the current log fields. No funnel counts are inferred.")
 
-        st.caption("These are log-derived counts, not a scanner funnel. Distinct symbols in the logs do not necessarily equal symbols scanned. A true scanned → qualified → rejected → alerted funnel requires explicit scanner-stage events.")
+    st.caption("These are log-derived counts, not a scanner funnel. Distinct symbols in the logs do not necessarily equal symbols scanned. A true scanned → qualified → rejected → alerted funnel requires explicit scanner-stage events.")
 
 if active_page == "Detector performance":
-        # 3. Detector performance
-        st.header("Detector performance")
-        perf_all = detector_summary(valid)
-        if not perf_all.empty:
-            show = perf_all[["detector", "alerts", "wins", "losses", "neutral", "win_rate", "avg_return", "median_return"]].copy()
-            show["win_rate"] = show["win_rate"].map(lambda x: f"{x:.1f}%")
-            show["avg_return"] = show["avg_return"].map(lambda x: f"{x:+.2f}%")
-            show["median_return"] = show["median_return"].map(lambda x: f"{x:+.2f}%")
-            show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
-            st.dataframe(show, use_container_width=True, hide_index=True)
-            chart = perf_all.sort_values("avg_return", ascending=True)
-            fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
-                         text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
-                         color="avg_return", color_continuous_scale=["#ff5b63", "#315b7a", "#39e75f"],
-                         labels={"avg_return": "Average final return", "detector": ""})
-            fig.update_layout(template="plotly_dark", height=max(220, 65 * len(chart)),
-                              margin=dict(l=8, r=12, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
-                              plot_bgcolor="rgba(0,0,0,0)", coloraxis_showscale=False,
-                              font=dict(color="#edf5ff"))
-            fig.update_traces(textposition="outside", cliponaxis=False)
-            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        else:
-            st.info("No closed tracked-alert returns are available yet. Scanner skips and diagnostics are excluded from detector performance.")
+    # 3. Detector performance
+    st.header("Detector performance")
+    perf_all = detector_summary(valid)
+    if not perf_all.empty:
+        show = perf_all[["detector", "alerts", "wins", "losses", "neutral", "win_rate", "avg_return", "median_return"]].copy()
+        show["win_rate"] = show["win_rate"].map(lambda x: f"{x:.1f}%")
+        show["avg_return"] = show["avg_return"].map(lambda x: f"{x:+.2f}%")
+        show["median_return"] = show["median_return"].map(lambda x: f"{x:+.2f}%")
+        show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
+        st.dataframe(show, use_container_width=True, hide_index=True)
+        chart = perf_all.sort_values("avg_return", ascending=True)
+        fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
+                     text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
+                     color="avg_return", color_continuous_scale=["#ff5b63", "#315b7a", "#39e75f"],
+                     labels={"avg_return": "Average final return", "detector": ""})
+        fig.update_layout(template="plotly_dark", height=max(220, 65 * len(chart)),
+                          margin=dict(l=8, r=12, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
+                          plot_bgcolor="rgba(0,0,0,0)", coloraxis_showscale=False,
+                          font=dict(color="#edf5ff"))
+        fig.update_traces(textposition="outside", cliponaxis=False)
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    else:
+        st.info("No closed tracked-alert returns are available yet. Scanner skips and diagnostics are excluded from detector performance.")
 
 if active_page == "Coin intelligence":
-        # 4. Coin intelligence
-        st.header("Coin intelligence")
-        coin_source = valid.copy() if not valid.empty and "symbol" in valid else pd.DataFrame()
-        if not coin_source.empty:
-            coin_source["final_percent"] = pd.to_numeric(coin_source["final_percent"], errors="coerce")
-            coin_source = coin_source.dropna(subset=["symbol", "final_percent"])
-            coin_rank = coin_source.groupby("symbol").agg(
-                alerts=("final_percent", "size"),
-                avg_return=("final_percent", "mean"),
-                median_return=("final_percent", "median"),
-                wins=("final_percent", lambda x: int((x >= 1.0).sum())),
-                losses=("final_percent", lambda x: int((x <= -0.5).sum())),
-                neutral=("final_percent", lambda x: int(((x > -0.5) & (x < 1.0)).sum())),
-            ).reset_index()
-            decisive_by_coin = coin_rank["wins"] + coin_rank["losses"]
-            coin_rank["win_rate"] = (coin_rank["wins"] / decisive_by_coin.replace(0, pd.NA) * 100)
-            coin_rank = coin_rank.sort_values(["avg_return", "alerts"], ascending=[False, False])
-            display = coin_rank.rename(columns={
-                "symbol": "Coin", "alerts": "Alerts", "wins": "Wins", "losses": "Losses",
-                "neutral": "Neutral", "win_rate": "Decisive win rate",
-                "avg_return": "Average return", "median_return": "Median return"
-            }).copy()
-            display["Decisive win rate"] = display["Decisive win rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-            display["Average return"] = display["Average return"].map(lambda x: f"{x:+.2f}%")
-            display["Median return"] = display["Median return"].map(lambda x: f"{x:+.2f}%")
-            st.dataframe(display, use_container_width=True, hide_index=True)
-            st.caption("Closed tracked alerts only. Sample size is shown for every coin; small samples should not be treated as reliable rankings.")
-        else:
-            st.info("Coin rankings will appear when closed tracked-alert records include symbol and final return.")
+    # 4. Coin intelligence
+    st.header("Coin intelligence")
+    coin_source = valid.copy() if not valid.empty and "symbol" in valid else pd.DataFrame()
+    if not coin_source.empty:
+        coin_source["final_percent"] = pd.to_numeric(coin_source["final_percent"], errors="coerce")
+        coin_source = coin_source.dropna(subset=["symbol", "final_percent"])
+        coin_rank = coin_source.groupby("symbol").agg(
+            alerts=("final_percent", "size"),
+            avg_return=("final_percent", "mean"),
+            median_return=("final_percent", "median"),
+            wins=("final_percent", lambda x: int((x >= 1.0).sum())),
+            losses=("final_percent", lambda x: int((x <= -0.5).sum())),
+            neutral=("final_percent", lambda x: int(((x > -0.5) & (x < 1.0)).sum())),
+        ).reset_index()
+        decisive_by_coin = coin_rank["wins"] + coin_rank["losses"]
+        coin_rank["win_rate"] = (coin_rank["wins"] / decisive_by_coin.replace(0, pd.NA) * 100)
+        coin_rank = coin_rank.sort_values(["avg_return", "alerts"], ascending=[False, False])
+        display = coin_rank.rename(columns={
+            "symbol": "Coin", "alerts": "Alerts", "wins": "Wins", "losses": "Losses",
+            "neutral": "Neutral", "win_rate": "Decisive win rate",
+            "avg_return": "Average return", "median_return": "Median return"
+        }).copy()
+        display["Decisive win rate"] = display["Decisive win rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+        display["Average return"] = display["Average return"].map(lambda x: f"{x:+.2f}%")
+        display["Median return"] = display["Median return"].map(lambda x: f"{x:+.2f}%")
+        st.dataframe(display, use_container_width=True, hide_index=True)
+        st.caption("Closed tracked alerts only. Sample size is shown for every coin; small samples should not be treated as reliable rankings.")
+    else:
+        st.info("Coin rankings will appear when closed tracked-alert records include symbol and final return.")
 
 if active_page == "Signal quality":
-        # 5. Signal quality — use the dedicated outcome stream, keeping it separate from alert_record.
-        st.header("Signal quality")
-        latest_eval = latest_outcomes(outcomes)
-        if not latest_eval.empty:
-            for col in ["original_volume_5m", "original_rsi_15m", "original_score", "pnl_percent", "mfe_percent", "mae_percent"]:
-                if col in latest_eval:
-                    latest_eval[col] = pd.to_numeric(latest_eval[col], errors="coerce")
-            counts = outcome_counts(latest_eval)
-            metric_row([
-                ("Evaluated alert IDs", f'{counts["alerts"]:,}'),
-                ("Wins", f'{counts["wins"]:,}'),
-                ("Losses", f'{counts["losses"]:,}'),
-                ("Neutral", f'{counts["neutral"]:,}'),
-                ("Decisive win rate", f'{counts["decisive_rate"]:.1f}%' if pd.notna(counts["decisive_rate"]) else "—"),
-            ])
-            quality_cols = [c for c in ["original_score", "original_volume_5m", "original_rsi_15m", "pnl_percent", "mfe_percent", "mae_percent"] if c in latest_eval]
-            if quality_cols:
-                display_cols = [c for c in ["symbol", "result"] + quality_cols if c in latest_eval]
-                quality_view = latest_eval[display_cols].copy()
-                quality_view = quality_view.rename(columns={
-                    "symbol": "Coin", "result": "Outcome", "original_score": "Original score",
-                    "original_volume_5m": "5m volume ratio", "original_rsi_15m": "15m RSI",
-                    "pnl_percent": "P&L", "mfe_percent": "Max favourable move", "mae_percent": "Max adverse move"
-                })
-                sort_col = "P&L" if "P&L" in quality_view.columns else None
-                if sort_col:
-                    quality_view = quality_view.sort_values(sort_col, ascending=False, na_position="last")
-                st.dataframe(quality_view, use_container_width=True, hide_index=True)
-            st.caption("Latest evaluation per alert ID. Outcome records are analyzed separately and are not merged with detector alert records.")
-        else:
-            st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
+    # 5. Signal quality — use the dedicated outcome stream, keeping it separate from alert_record.
+    st.header("Signal quality")
+    latest_eval = latest_outcomes(outcomes)
+    if not latest_eval.empty:
+        for col in ["original_volume_5m", "original_rsi_15m", "original_score", "pnl_percent", "mfe_percent", "mae_percent"]:
+            if col in latest_eval:
+                latest_eval[col] = pd.to_numeric(latest_eval[col], errors="coerce")
+        counts = outcome_counts(latest_eval)
+        metric_row([
+            ("Evaluated alert IDs", f'{counts["alerts"]:,}'),
+            ("Wins", f'{counts["wins"]:,}'),
+            ("Losses", f'{counts["losses"]:,}'),
+            ("Neutral", f'{counts["neutral"]:,}'),
+            ("Decisive win rate", f'{counts["decisive_rate"]:.1f}%' if pd.notna(counts["decisive_rate"]) else "—"),
+        ])
+        quality_cols = [c for c in ["original_score", "original_volume_5m", "original_rsi_15m", "pnl_percent", "mfe_percent", "mae_percent"] if c in latest_eval]
+        if quality_cols:
+            display_cols = [c for c in ["symbol", "result"] + quality_cols if c in latest_eval]
+            quality_view = latest_eval[display_cols].copy()
+            quality_view = quality_view.rename(columns={
+                "symbol": "Coin", "result": "Outcome", "original_score": "Original score",
+                "original_volume_5m": "5m volume ratio", "original_rsi_15m": "15m RSI",
+                "pnl_percent": "P&L", "mfe_percent": "Max favourable move", "mae_percent": "Max adverse move"
+            })
+            sort_col = "P&L" if "P&L" in quality_view.columns else None
+            if sort_col:
+                quality_view = quality_view.sort_values(sort_col, ascending=False, na_position="last")
+            st.dataframe(quality_view, use_container_width=True, hide_index=True)
+        st.caption("Latest evaluation per alert ID. Outcome records are analyzed separately and are not merged with detector alert records.")
+    else:
+        st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
 
 if active_page == "Logs & diagnostics":
-        # 6. Latest R2 log — explicit latest file metadata and useful activity, not raw telemetry.
-        st.header("Latest log file")
-        if latest_name:
-            st.markdown(f"**Newest file currently present in Cloudflare R2:** {latest_name}")
-            if pd.notna(latest_time):
-                archive_age_hours = (pd.Timestamp.now(tz="UTC") - latest_time).total_seconds() / 3600
-                if archive_age_hours > 12:
-                    st.error(f"R2 ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
-                else:
-                    st.success(f"R2 freshness: newest event is {archive_age_hours:.1f} hours old.")
-            file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
-            file_records = len(latest_rows)
-            metric_row([
-                ("Records in latest file", f"{file_records:,}"),
-                ("Distinct symbols", f'{latest_df["symbol"].nunique() if "symbol" in latest_df else 0:,}'),
-                ("Latest event time", latest_time_pak),
-                ("File size", f'{next((x["size"] for x in archive_status["objects"] if x["name"] == latest_name), 0) / 1024:.1f} KB'),
-            ])
-            if not file_event_counts.empty:
-                st.caption("Event mix: " + " · ".join(f"{k}: {v:,}" for k, v in file_event_counts.head(6).items()))
-            if "diagnostic.reason" in latest_df:
-                reasons = latest_df["diagnostic.reason"].dropna().astype(str).value_counts().head(5)
-                if not reasons.empty:
-                    st.caption("Most common gate/skip reasons: " + " · ".join(f"{k} ({v})" for k, v in reasons.items()))
-            if not latest_df.empty and "_ts" in latest_df:
-                latest_activity = latest_df.sort_values("_ts", ascending=False, na_position="last")
-                useful = latest_activity[
-                    ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
-                        ["volume_cache_snapshot", "signal_quality_snapshot"]
-                    )
-                ].head(12)
-                cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in useful]
-                if not useful.empty and cols:
-                    st.dataframe(useful[cols], use_container_width=True, hide_index=True)
-                else:
-                    st.info("The newest file contains telemetry snapshots but no alert/rejection events to display.")
-        else:
-            st.info("No archive log file is available.")
-
-        # Recent actual alerts, capped to 20 rows.
-        st.header("Recent alerts")
-        if not alerts.empty:
-            recent = alerts.sort_values("_ts", ascending=False, na_position="last").head(20).copy()
-            cols = [c for c in ["timestamp", "symbol", "detector", "alert_type", "signal_score", "final_percent", "peak_percent", "worst_percent", "exit_reason"] if c in recent]
-            if cols:
-                st.dataframe(recent[cols], use_container_width=True, hide_index=True)
+    # 6. Latest R2 log — explicit latest file metadata and useful activity, not raw telemetry.
+    st.header("Latest log file")
+    if latest_name:
+        st.markdown(f"**Newest file currently present in Cloudflare R2:** {latest_name}")
+        if pd.notna(latest_time):
+            archive_age_hours = (pd.Timestamp.now(tz="UTC") - latest_time).total_seconds() / 3600
+            if archive_age_hours > 12:
+                st.error(f"R2 ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
             else:
-                st.info("Alert records exist, but do not contain the expected display fields.")
-        else:
-            st.info("No alert_record events are present in the loaded archive.")
+                st.success(f"R2 freshness: newest event is {archive_age_hours:.1f} hours old.")
+        file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
+        file_records = len(latest_rows)
+        metric_row([
+            ("Records in latest file", f"{file_records:,}"),
+            ("Distinct symbols", f'{latest_df["symbol"].nunique() if "symbol" in latest_df else 0:,}'),
+            ("Latest event time", latest_time_pak),
+            ("File size", f'{next((x["size"] for x in archive_status["objects"] if x["name"] == latest_name), 0) / 1024:.1f} KB'),
+        ])
+        if not file_event_counts.empty:
+            st.caption("Event mix: " + " · ".join(f"{k}: {v:,}" for k, v in file_event_counts.head(6).items()))
+        if "diagnostic.reason" in latest_df:
+            reasons = latest_df["diagnostic.reason"].dropna().astype(str).value_counts().head(5)
+            if not reasons.empty:
+                st.caption("Most common gate/skip reasons: " + " · ".join(f"{k} ({v})" for k, v in reasons.items()))
+        if not latest_df.empty and "_ts" in latest_df:
+            latest_activity = latest_df.sort_values("_ts", ascending=False, na_position="last")
+            useful = latest_activity[
+                ~latest_activity.get("event_type", pd.Series("", index=latest_activity.index)).astype(str).isin(
+                    ["volume_cache_snapshot", "signal_quality_snapshot"]
+                )
+            ].head(12)
+            cols = [c for c in ["timestamp", "symbol", "event_type", "alert_type", "signal_score", "final_percent", "diagnostic.stage", "diagnostic.reason"] if c in useful]
+            if not useful.empty and cols:
+                st.dataframe(useful[cols], use_container_width=True, hide_index=True)
+            else:
+                st.info("The newest file contains telemetry snapshots but no alert/rejection events to display.")
+    else:
+        st.info("No archive log file is available.")
 
-        # Keep raw detail available only when deliberately requested.
-        with st.expander("Advanced diagnostics · raw data and exports"):
-            st.caption("Open only when investigating a specific issue. This section is intentionally hidden by default.")
-            st.write(f"Archive files loaded: {archive_status['loaded']:,} · Read errors: {len(archive_status['errors']):,} · Parse errors: {len(errors):,}")
-            if errors:
-                st.dataframe(pd.DataFrame(errors).head(100), use_container_width=True, hide_index=True)
-            event_counts = combined.get("event_type", pd.Series("unknown", index=combined.index)).fillna("unknown").value_counts()
-            st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
-            csv_data = combined.drop(columns=["_ts"], errors="ignore").to_csv(index=False).encode("utf-8")
-            st.download_button("Download all parsed records (CSV)", csv_data, "pingr_parsed_records.csv", "text/csv")
-            jsonl_out = "\\n".join(json.dumps(r, default=str) for r in combined_rows)
-            st.download_button("Download deduplicated records (JSONL)", jsonl_out, "pingr_deduplicated.jsonl", "application/json")
+    # Recent actual alerts, capped to 20 rows.
+    st.header("Recent alerts")
+    if not alerts.empty:
+        recent = alerts.sort_values("_ts", ascending=False, na_position="last").head(20).copy()
+        cols = [c for c in ["timestamp", "symbol", "detector", "alert_type", "signal_score", "final_percent", "peak_percent", "worst_percent", "exit_reason"] if c in recent]
+        if cols:
+            st.dataframe(recent[cols], use_container_width=True, hide_index=True)
+        else:
+            st.info("Alert records exist, but do not contain the expected display fields.")
+    else:
+        st.info("No alert_record events are present in the loaded archive.")
+
+    # Keep raw detail available only when deliberately requested.
+    with st.expander("Advanced diagnostics · raw data and exports"):
+        st.caption("Open only when investigating a specific issue. This section is intentionally hidden by default.")
+        st.write(f"Archive files loaded: {archive_status['loaded']:,} · Read errors: {len(archive_status['errors']):,} · Parse errors: {len(errors):,}")
+        if errors:
+            st.dataframe(pd.DataFrame(errors).head(100), use_container_width=True, hide_index=True)
+        event_counts = combined.get("event_type", pd.Series("unknown", index=combined.index)).fillna("unknown").value_counts()
+        st.dataframe(event_counts.rename_axis("Event type").reset_index(name="Records"), use_container_width=True, hide_index=True)
+        csv_data = combined.drop(columns=["_ts"], errors="ignore").to_csv(index=False).encode("utf-8")
+        st.download_button("Download all parsed records (CSV)", csv_data, "pingr_parsed_records.csv", "text/csv")
+        jsonl_out = "\\n".join(json.dumps(r, default=str) for r in combined_rows)
+        st.download_button("Download deduplicated records (JSONL)", jsonl_out, "pingr_deduplicated.jsonl", "application/json")
 
 st.divider()
 st.caption("PINGR ANALYTICS · Read-only analytics · R2 archive and Pingr engine are not modified by this dashboard.")
