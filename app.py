@@ -748,133 +748,139 @@ else:
 if active_page == "Overview":
     st.markdown('<div class="page-kicker">01 / COMMAND CENTRE</div><div class="page-heading">Signal Intelligence</div><div class="page-subheading">Performance, patterns and insights from Pingr signal archives.</div>', unsafe_allow_html=True)
 
-    # Header status and compact KPI row.
-    st.markdown(
-        f'<div class="top-status"><span class="status-live"></span><span><b>LAST ARCHIVE UPDATE</b><br>{latest_alert_label}</span>'
-        f'<span class="status-divider"></span><span class="archive-meta">{len(combined):,} events · {archive_status["loaded"]:,} R2 files</span></div>',
-        unsafe_allow_html=True
-    )
-    kpis = [
-        ("◉", "Total Signals", f"{len(alerts):,}", "cyan"),
-        ("🏆", "Win Rate", f"{win_rate:.1f}%" if pd.notna(win_rate) else "—", "green"),
-        ("◎", "Decisive Win Rate", f"{decisive_rate:.1f}%" if pd.notna(decisive_rate) else "—", "green"),
-        ("↗", "Winners", f"{wins:,}", "green"),
-        ("↘", "Losers", f"{losses:,}", "red"),
-    ]
-    kpi_html = "".join(
-        f'<div class="kpi-card {tone}"><div class="kpi-icon">{icon}</div><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>'
-        for icon,label,value,tone in kpis
-    )
-    st.markdown(f'<div class="kpi-grid">{kpi_html}</div>', unsafe_allow_html=True)
-
-    # Full-width symbol leaderboard keeps names and metrics readable on tablet/desktop.
-    st.markdown('<div class="panel-title">Signal Performance <span class="panel-sub">(ranked by decisive win rate)</span></div>', unsafe_allow_html=True)
-    if not symbol_rank_view.empty:
-        st.dataframe(
-            symbol_rank_view,
-            use_container_width=True,
-            hide_index=True,
-            column_config={
-                "Win Rate": st.column_config.TextColumn("Win Rate"),
-                "Median P&L": st.column_config.TextColumn("Median P&L"),
-            },
+    # Keep winner/loser counts, symbol performance, comparison metrics and individual
+    # winning-alert liquidity in one visually grouped area to prevent split interpretations.
+    with st.container(border=True):
+        st.markdown("### Signal & Winner Intelligence")
+        st.caption("One consolidated view: overall results, symbol performance, winner-versus-loser indicators and every winning alert.")
+        # Header status and compact KPI row.
+        st.markdown(
+            f'<div class="top-status"><span class="status-live"></span><span><b>LAST ARCHIVE UPDATE</b><br>{latest_alert_label}</span>'
+            f'<span class="status-divider"></span><span class="archive-meta">{len(combined):,} events · {archive_status["loaded"]:,} R2 files</span></div>',
+            unsafe_allow_html=True
         )
-    else:
-        st.info("Symbol performance appears when closed tracked-alert records include symbols.")
-    st.caption("Ranked from closed tracked-alert records. Win rate excludes neutral outcomes.")
+        kpis = [
+            ("◉", "Total Signals", f"{len(alerts):,}", "cyan"),
+            ("🏆", "Win Rate", f"{win_rate:.1f}%" if pd.notna(win_rate) else "—", "green"),
+            ("◎", "Decisive Win Rate", f"{decisive_rate:.1f}%" if pd.notna(decisive_rate) else "—", "green"),
+            ("↗", "Winners", f"{wins:,}", "green"),
+            ("↘", "Losers", f"{losses:,}", "red"),
+        ]
+        kpi_html = "".join(
+            f'<div class="kpi-card {tone}"><div class="kpi-icon">{icon}</div><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>'
+            for icon,label,value,tone in kpis
+        )
+        st.markdown(f'<div class="kpi-grid">{kpi_html}</div>', unsafe_allow_html=True)
 
-    # Winner/loser indicator comparison takes the full width; Outcome Mix removed.
-    st.markdown('<div class="panel-title">Winner vs Loser · Key Metrics</div>', unsafe_allow_html=True)
-    metric_lookup = {row["Group"]: row for _,row in summary_df.iterrows()} if not summary_df.empty else {}
-    metric_specs = [
-        ("Signal score", "number"),
-        ("15m RSI", "number"),
-        ("5m volume ratio", "multiple"),
-        ("5m price change %", "percent"),
-        ("MACD 5m bullish %", "percent"),
-        ("MACD 15m bullish %", "percent"),
-        ("MACD 1h bullish %", "percent"),
-    ]
-    for label, kind in metric_specs:
-        w = metric_lookup.get("Winners",{}).get(label,float("nan"))
-        l = metric_lookup.get("Losers",{}).get(label,float("nan"))
-        if pd.isna(w) and pd.isna(l):
-            continue
-        if kind == "multiple":
-            wv,lv=(f"{w:.2f}×" if pd.notna(w) else "—"),(f"{l:.2f}×" if pd.notna(l) else "—")
-        elif kind == "percent":
-            wv,lv=(f"{w:.1f}%" if pd.notna(w) else "—"),(f"{l:.1f}%" if pd.notna(l) else "—")
+        # Full-width symbol leaderboard keeps names and metrics readable on tablet/desktop.
+        st.markdown('<div class="panel-title">Signal Performance <span class="panel-sub">(ranked by decisive win rate)</span></div>', unsafe_allow_html=True)
+        if not symbol_rank_view.empty:
+            st.dataframe(
+                symbol_rank_view,
+                use_container_width=True,
+                hide_index=True,
+                column_config={
+                    "Win Rate": st.column_config.TextColumn("Win Rate"),
+                    "Median P&L": st.column_config.TextColumn("Median P&L"),
+                },
+            )
         else:
-            wv,lv=(f"{w:.1f}" if pd.notna(w) else "—"),(f"{l:.1f}" if pd.notna(l) else "—")
-        st.markdown(
-            f'<div class="mini-metric"><span>{label}</span><b class="positive">{wv} (W)</b><i>|</i><b class="negative">{lv} (L)</b></div>',
-            unsafe_allow_html=True,
-        )
-    for bound in ("Min", "Max"):
-        label = f"24h Quote Vol {bound}"
-        w = metric_lookup.get("Winners",{}).get(label,float("nan"))
-        l = metric_lookup.get("Losers",{}).get(label,float("nan"))
-        if pd.isna(w) and pd.isna(l):
-            continue
-        st.markdown(
-            f'<div class="mini-metric"><span>{label}</span><b class="positive">{compact_volume(w)} (W)</b><i>|</i><b class="negative">{compact_volume(l)} (L)</b></div>',
-            unsafe_allow_html=True,
-        )
-    st.caption("Values compare medians for numeric indicators and bullish share for MACD. Missing source fields are omitted; no values are inferred.")
+            st.info("Symbol performance appears when closed tracked-alert records include symbols.")
+        st.caption("Ranked from closed tracked-alert records. Win rate excludes neutral outcomes.")
 
-    st.subheader("All winning alerts · 24h liquidity")
-    # Use the same alert_record rows that power the Overview Winners KPI (final return >= +1%).
-    # Enrich each row from its matching latest alert_outcome by alert_id; never join on symbol alone.
-    winning_alerts = valid[pd.to_numeric(valid["final_percent"], errors="coerce") >= 1.0].copy() if not valid.empty else pd.DataFrame()
-    if not winning_alerts.empty:
-        winner_view = winning_alerts.copy()
-        outcome_liquidity_field = liquidity_field if liquidity_field and liquidity_field in overview_outcomes.columns else None
-        if outcome_liquidity_field and "alert_id" in winner_view.columns and "alert_id" in overview_outcomes.columns:
-            liquidity_lookup = overview_outcomes[["alert_id", outcome_liquidity_field]].dropna(subset=["alert_id"]).drop_duplicates("alert_id", keep="last")
-            winner_view = winner_view.merge(liquidity_lookup, on="alert_id", how="left", suffixes=("", "_outcome"), validate="many_to_one")
-            if outcome_liquidity_field + "_outcome" in winner_view.columns:
-                winner_view[outcome_liquidity_field] = pd.to_numeric(winner_view[outcome_liquidity_field], errors="coerce").combine_first(
-                    pd.to_numeric(winner_view[outcome_liquidity_field + "_outcome"], errors="coerce")
+        # Winner/loser indicator comparison takes the full width; Outcome Mix removed.
+        st.markdown('<div class="panel-title">Winner vs Loser · Key Metrics</div>', unsafe_allow_html=True)
+        metric_lookup = {row["Group"]: row for _,row in summary_df.iterrows()} if not summary_df.empty else {}
+        metric_specs = [
+            ("Signal score", "number"),
+            ("15m RSI", "number"),
+            ("5m volume ratio", "multiple"),
+            ("5m price change %", "percent"),
+            ("MACD 5m bullish %", "percent"),
+            ("MACD 15m bullish %", "percent"),
+            ("MACD 1h bullish %", "percent"),
+        ]
+        for label, kind in metric_specs:
+            w = metric_lookup.get("Winners",{}).get(label,float("nan"))
+            l = metric_lookup.get("Losers",{}).get(label,float("nan"))
+            if pd.isna(w) and pd.isna(l):
+                continue
+            if kind == "multiple":
+                wv,lv=(f"{w:.2f}×" if pd.notna(w) else "—"),(f"{l:.2f}×" if pd.notna(l) else "—")
+            elif kind == "percent":
+                wv,lv=(f"{w:.1f}%" if pd.notna(w) else "—"),(f"{l:.1f}%" if pd.notna(l) else "—")
+            else:
+                wv,lv=(f"{w:.1f}" if pd.notna(w) else "—"),(f"{l:.1f}" if pd.notna(l) else "—")
+            st.markdown(
+                f'<div class="mini-metric"><span>{label}</span><b class="positive">{wv} (W)</b><i>|</i><b class="negative">{lv} (L)</b></div>',
+                unsafe_allow_html=True,
+            )
+        for bound in ("Min", "Max"):
+            label = f"24h Quote Vol {bound}"
+            w = metric_lookup.get("Winners",{}).get(label,float("nan"))
+            l = metric_lookup.get("Losers",{}).get(label,float("nan"))
+            if pd.isna(w) and pd.isna(l):
+                continue
+            st.markdown(
+                f'<div class="mini-metric"><span>{label}</span><b class="positive">{compact_volume(w)} (W)</b><i>|</i><b class="negative">{compact_volume(l)} (L)</b></div>',
+                unsafe_allow_html=True,
+            )
+        st.caption("Values compare medians for numeric indicators and bullish share for MACD. Missing source fields are omitted; no values are inferred.")
+
+        st.subheader("All winning alerts · 24h liquidity")
+        # Use the same alert_record rows that power the Overview Winners KPI (final return >= +1%).
+        # Enrich each row from its matching latest alert_outcome by alert_id; never join on symbol alone.
+        winning_alerts = valid[pd.to_numeric(valid["final_percent"], errors="coerce") >= 1.0].copy() if not valid.empty else pd.DataFrame()
+        if not winning_alerts.empty:
+            winner_view = winning_alerts.copy()
+            outcome_liquidity_field = liquidity_field if liquidity_field and liquidity_field in overview_outcomes.columns else None
+            if outcome_liquidity_field and "alert_id" in winner_view.columns and "alert_id" in overview_outcomes.columns:
+                liquidity_lookup = overview_outcomes[["alert_id", outcome_liquidity_field]].dropna(subset=["alert_id"]).drop_duplicates("alert_id", keep="last")
+                winner_view = winner_view.merge(liquidity_lookup, on="alert_id", how="left", suffixes=("", "_outcome"), validate="many_to_one")
+                if outcome_liquidity_field + "_outcome" in winner_view.columns:
+                    winner_view[outcome_liquidity_field] = pd.to_numeric(winner_view[outcome_liquidity_field], errors="coerce").combine_first(
+                        pd.to_numeric(winner_view[outcome_liquidity_field + "_outcome"], errors="coerce")
+                    )
+            elif outcome_liquidity_field and outcome_liquidity_field not in winner_view.columns:
+                winner_view[outcome_liquidity_field] = pd.NA
+
+            display_columns = []
+            for field, label in [
+                ("timestamp", "Time"), ("symbol", "Symbol"), ("detector", "Alert type"),
+                ("signal_score", "Signal score"), (outcome_liquidity_field, "24h liquidity (quote volume)"),
+                ("final_percent", "P&L %"),
+            ]:
+                if field and field in winner_view.columns and field not in display_columns:
+                    display_columns.append(field)
+            winner_view = winner_view[display_columns].copy()
+            winner_view = winner_view.rename(columns={
+                "timestamp": "Time", "symbol": "Symbol", "detector": "Alert type",
+                "signal_score": "Signal score", "final_percent": "P&L %",
+                outcome_liquidity_field: "24h liquidity (quote volume)" if outcome_liquidity_field else "",
+            })
+            if "24h liquidity (quote volume)" in winner_view:
+                winner_view["24h liquidity (quote volume)"] = pd.to_numeric(
+                    winner_view["24h liquidity (quote volume)"], errors="coerce"
+                ).map(lambda x: compact_volume(x) if pd.notna(x) else "Not recorded")
+            if "P&L %" in winner_view:
+                winner_view["P&L %"] = pd.to_numeric(winner_view["P&L %"], errors="coerce").map(
+                    lambda x: f"{x:+.2f}%" if pd.notna(x) else "—"
                 )
-        elif outcome_liquidity_field and outcome_liquidity_field not in winner_view.columns:
-            winner_view[outcome_liquidity_field] = pd.NA
+            if "Signal score" in winner_view:
+                winner_view["Signal score"] = pd.to_numeric(winner_view["Signal score"], errors="coerce").map(
+                    lambda x: f"{x:.1f}" if pd.notna(x) else "—"
+                )
+            if "Time" in winner_view:
+                parsed_time = pd.to_datetime(winner_view["Time"], errors="coerce", utc=True)
+                winner_view["Time"] = parsed_time.dt.tz_convert("Asia/Karachi").dt.strftime("%d %b %H:%M PKT").fillna("—")
+            st.dataframe(winner_view, use_container_width=True, hide_index=True)
+            liquidity_count = int((winner_view["24h liquidity (quote volume)"] != "Not recorded").sum()) if "24h liquidity (quote volume)" in winner_view else 0
+            st.caption(f"{len(winner_view)} winning alert records — the same records counted in the Winners KPI. 24h liquidity is matched by alert_id; {liquidity_count} have a recorded value.")
+            if "24h liquidity (quote volume)" not in winner_view:
+                st.warning("No explicit 24h quote-volume field is present in the current outcome data. Liquidity is not inferred from short-term volume.")
+        else:
+            st.info("No winning alert records are available in the current archive.")
 
-        display_columns = []
-        for field, label in [
-            ("timestamp", "Time"), ("symbol", "Symbol"), ("detector", "Alert type"),
-            ("signal_score", "Signal score"), (outcome_liquidity_field, "24h liquidity (quote volume)"),
-            ("final_percent", "P&L %"),
-        ]:
-            if field and field in winner_view.columns and field not in display_columns:
-                display_columns.append(field)
-        winner_view = winner_view[display_columns].copy()
-        winner_view = winner_view.rename(columns={
-            "timestamp": "Time", "symbol": "Symbol", "detector": "Alert type",
-            "signal_score": "Signal score", "final_percent": "P&L %",
-            outcome_liquidity_field: "24h liquidity (quote volume)" if outcome_liquidity_field else "",
-        })
-        if "24h liquidity (quote volume)" in winner_view:
-            winner_view["24h liquidity (quote volume)"] = pd.to_numeric(
-                winner_view["24h liquidity (quote volume)"], errors="coerce"
-            ).map(lambda x: compact_volume(x) if pd.notna(x) else "Not recorded")
-        if "P&L %" in winner_view:
-            winner_view["P&L %"] = pd.to_numeric(winner_view["P&L %"], errors="coerce").map(
-                lambda x: f"{x:+.2f}%" if pd.notna(x) else "—"
-            )
-        if "Signal score" in winner_view:
-            winner_view["Signal score"] = pd.to_numeric(winner_view["Signal score"], errors="coerce").map(
-                lambda x: f"{x:.1f}" if pd.notna(x) else "—"
-            )
-        if "Time" in winner_view:
-            parsed_time = pd.to_datetime(winner_view["Time"], errors="coerce", utc=True)
-            winner_view["Time"] = parsed_time.dt.tz_convert("Asia/Karachi").dt.strftime("%d %b %H:%M PKT").fillna("—")
-        st.dataframe(winner_view, use_container_width=True, hide_index=True)
-        liquidity_count = int((winner_view["24h liquidity (quote volume)"] != "Not recorded").sum()) if "24h liquidity (quote volume)" in winner_view else 0
-        st.caption(f"{len(winner_view)} winning alert records — the same records counted in the Winners KPI. 24h liquidity is matched by alert_id; {liquidity_count} have a recorded value.")
-        if "24h liquidity (quote volume)" not in winner_view:
-            st.warning("No explicit 24h quote-volume field is present in the current outcome data. Liquidity is not inferred from short-term volume.")
-    else:
-        st.info("No winning alert records are available in the current archive.")
 
     # Compact insight strip from actual sample observations.
     insight_items=[]
