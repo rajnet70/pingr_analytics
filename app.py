@@ -741,19 +741,72 @@ with tab_overview:
                 pattern_rows.append(row)
 
             if pattern_rows:
-                patterns_df = pd.DataFrame(pattern_rows)
-                st.dataframe(patterns_df, use_container_width=True, hide_index=True)
                 winner_n = int(classified["result"].eq("win").sum())
                 loser_n = int(classified["result"].eq("loss").sum())
+                st.markdown("**Winning vs losing indicator distributions**")
+                chart_specs = [
+                    (field, label, kind) for field, label, kind in pattern_specs
+                    if field in classified.columns and classified[field].notna().any()
+                ]
+                chart_palette = {"win":"#55c7a5","loss":"#f07888","neutral":"#7893aa"}
+                for field, label, kind in chart_specs:
+                    chart_data = classified[
+                        classified["result"].isin(["win", "loss"]) & classified[field].notna()
+                    ][["result", field]].copy()
+                    if chart_data.empty:
+                        continue
+                    chart_data["Outcome"] = chart_data["result"].map(
+                        {"win":"Winners", "loss":"Losers"}
+                    )
+                    chart_data[field] = pd.to_numeric(chart_data[field], errors="coerce")
+                    chart_data = chart_data.dropna(subset=[field])
+                    if chart_data.empty:
+                        continue
+                    if kind == "volume":
+                        axis_title = "24h quote volume (USD)"
+                        tick_format = "~s"
+                    elif kind == "multiple":
+                        axis_title = "Volume ratio (×)"
+                        tick_format = ".2f"
+                    elif kind == "percent":
+                        axis_title = "Price change (%)"
+                        tick_format = ".2f"
+                    else:
+                        axis_title = label
+                        tick_format = ".1f"
+                    pattern_fig = px.box(
+                        chart_data, x=field, y="Outcome", color="Outcome",
+                        points="all", notched=False,
+                        color_discrete_map={"Winners":chart_palette["win"],"Losers":chart_palette["loss"]},
+                        labels={field:axis_title,"Outcome":""},
+                        title=label
+                    )
+                    pattern_fig.update_layout(
+                        template="plotly_dark", height=265, showlegend=False,
+                        margin=dict(l=18,r=18,t=48,b=12),
+                        paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
+                        font=dict(color="#eaf5ff"),
+                        xaxis=dict(gridcolor="rgba(66,184,244,.12)",tickformat=tick_format),
+                        yaxis=dict(gridcolor="rgba(66,184,244,.08)")
+                    )
+                    pattern_fig.update_traces(
+                        marker=dict(size=8,opacity=.9,line=dict(width=1,color="#07111e")),
+                        line=dict(width=2)
+                    )
+                    st.plotly_chart(pattern_fig,use_container_width=True,config={"displayModeBar":False})
+                st.caption(
+                    f"Distribution charts use individual alert outcomes: {winner_n} winners and {loser_n} losers. "
+                    "Boxes show the middle 50% and median; points show individual alerts."
+                )
                 if min(winner_n, loser_n) < 5:
                     st.warning(
                         f"Early read only: {winner_n} winners and {loser_n} losers. "
-                        "Ranges will become more meaningful as the sample grows; avoid treating them as thresholds."
+                        "Small samples make these distributions unstable; do not treat them as trading thresholds."
                     )
                 else:
-                    st.caption(f"Based on {winner_n} winning and {loser_n} losing outcomes in the current archive.")
+                    st.caption("Patterns are descriptive observations, not proof that an indicator caused an outcome.")
             else:
-                st.info("No supported indicator fields are available to calculate patterns yet.")
+                st.info("No supported indicator fields are available to chart patterns yet.")
         else:
             st.info("No final win/loss/neutral outcomes are available yet.")
         if not liquidity_field:
