@@ -829,7 +829,7 @@ if closed_count and "symbol" in valid.columns:
     if "detector" in symbol_data:
         direction = symbol_data.groupby("symbol")["detector"].agg(lambda x: str(x.mode().iloc[0]) if not x.mode().empty else "MIXED")
         symbol_rank["Signal"] = symbol_rank["symbol"].map(direction).fillna("MIXED")
-    symbol_rank_view = symbol_rank.head(8).rename(columns={
+    symbol_rank_view = symbol_rank.rename(columns={
         "symbol":"Symbol", "signals":"Signals", "wins":"Wins", "losses":"Losses",
         "win_rate":"Win Rate", "median_pnl":"Median P&L", "avg_score":"Score (Avg)"
     })
@@ -923,7 +923,7 @@ if active_page == "Overview":
             )
         st.caption("Values compare medians for numeric indicators and bullish share for MACD. Missing source fields are omitted; no values are inferred.")
 
-        st.subheader("All winning alerts · 24h liquidity")
+        st.subheader("All winning alerts · complete indicator and liquidity record")
         # One complete winner ledger. Enrich only through a unique, verified alert_id.
         winning_alerts = valid[pd.to_numeric(valid["final_percent"], errors="coerce") >= 1.0].copy() if not valid.empty else pd.DataFrame()
         if not winning_alerts.empty:
