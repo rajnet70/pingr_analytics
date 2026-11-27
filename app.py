@@ -386,7 +386,7 @@ def enrich_alert_records_with_outcomes(alert_records, outcomes, tolerance_second
     parsed_outcomes = latest.copy()
     parsed_outcomes["_id_symbol"] = parsed_outcomes["alert_id"].astype(str).str.rsplit("_", n=1).str[0]
     parsed_outcomes["_id_epoch"] = pd.to_numeric(
-        parsed_outcomes["alert_id"].astype(str).str.extract(r"_(\\d{10})$")[0],
+        parsed_outcomes["alert_id"].astype(str).str.extract(r"_(\d{10})$")[0],
         errors="coerce"
     )
     for _, outcome in parsed_outcomes.dropna(subset=["_id_epoch"]).iterrows():
