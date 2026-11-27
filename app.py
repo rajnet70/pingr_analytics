@@ -910,10 +910,15 @@ if active_page == "Patterns":
                 recommendations.append((1, label, f"Collect more evidence for {label}: only {wn} winning and {ln} losing records have usable values. No recommendation is made yet."))
                 continue
             wmed, lmed = win_stats["median"], loss_stats["median"]
+            def recommendation_value(value, value_kind):
+                if value_kind == "volume": return compact_volume(value)
+                if value_kind == "percent": return f"{value:+.2f}%"
+                if value_kind == "multiple": return f"{value:.2f}×"
+                return f"{value:.1f}"
             if pd.isclose(wmed, lmed):
                 recommendations.append((2, label, f"{label} medians are similar for winners and losers. Do not prioritize this indicator as a separator based on this sample."))
             elif wmed > lmed:
-                recommendations.append((0, label, f"Winners show a higher median {label} than losers ({pattern_value(wmed)} vs {pattern_value(lmed)}). Review this as a candidate confirmation feature; validate on later alerts before changing any rule."))
+                recommendations.append((0, label, f"Winners show a higher median {label} than losers ({recommendation_value(wmed, kind)} vs {recommendation_value(lmed, kind)}). Review this as a candidate confirmation feature; validate on later alerts before changing any rule."))
             else:
                 recommendations.append((0, label, f"Winners show a lower median {label} than losers ({pattern_value(wmed)} vs {pattern_value(lmed)}). Review whether lower readings are associated with better outcomes; validate on later alerts before changing any rule."))
 
