@@ -875,18 +875,109 @@ if active_page == "Patterns":
                     st.dataframe(subset.style.format(formats, na_rep="—"), use_container_width=True, hide_index=True)
 
         st.divider()
-        st.subheader("Indicator patterns")
-        st.caption("Ranges show the 25th–75th percentile, with the median in parentheses. Sample counts are shown separately.")
+        st.markdown(
+            '<div class="pattern-heading"><div><div class="page-kicker">OUTCOME COMPARISON</div>'
+            '<div class="pattern-title">Indicator patterns</div><div class="pattern-subtitle">What the winning and losing alerts looked like — based on recorded outcomes.</div></div>'
+            '<div class="pattern-counts"><span class="pattern-win-count">▲ ' + str(winner_n) + ' WINNERS</span>'
+            '<span class="pattern-loss-count">▼ ' + str(loser_n) + ' LOSERS</span></div></div>',
+            unsafe_allow_html=True
+        )
         if pattern_rows:
-            pattern_detail = pd.DataFrame(pattern_rows).rename(columns={
-                "Winners n":"Winner sample", "Losers n":"Loser sample"
-            })
-            pattern_style = pattern_detail.style
-            if "Winners" in pattern_detail.columns:
-                pattern_style = pattern_style.set_properties(subset=["Winners"], **{"color":"#39e75f","font-weight":"700"})
-            if "Losers" in pattern_detail.columns:
-                pattern_style = pattern_style.set_properties(subset=["Losers"], **{"color":"#ff5b63","font-weight":"700"})
-            st.dataframe(pattern_style, use_container_width=True, hide_index=True)
+            pattern_cards = []
+            for field, label, kind in pattern_specs:
+                if field not in classified.columns:
+                    continue
+                groups = {}
+                all_values = []
+                for result_name in ("win", "loss"):
+                    vals = pd.to_numeric(
+                        classified.loc[classified["result"].eq(result_name), field],
+                        errors="coerce"
+                    ).dropna()
+                    if not vals.empty:
+                        q1, med, q3 = vals.quantile([.25, .50, .75]).tolist()
+                        groups[result_name] = {"q1": q1, "median": med, "q3": q3, "n": len(vals)}
+                        all_values.extend(vals.tolist())
+                    else:
+                        groups[result_name] = None
+
+                if not all_values:
+                    continue
+                scale_min, scale_max = min(all_values), max(all_values)
+                scale_span = max(scale_max - scale_min, 1e-9)
+
+                def pattern_value(value):
+                    if kind == "volume":
+                        return compact_volume(value)
+                    if kind == "percent":
+                        return f"{value:+.2f}%"
+                    if kind == "multiple":
+                        return f"{value:.2f}×"
+                    return f"{value:.1f}"
+
+                def pattern_group_html(result_name, title, tone):
+                    stats = groups[result_name]
+                    if not stats:
+                        return (
+                            f'<div class="pattern-side {tone}"><div class="pattern-side-label">{title}</div>'
+                            '<div class="pattern-no-data">No recorded values</div></div>'
+                        )
+                    left = max(0, min(100, (stats["q1"] - scale_min) / scale_span * 100))
+                    right = max(left + 1.5, min(100, (stats["q3"] - scale_min) / scale_span * 100))
+                    marker = max(0, min(100, (stats["median"] - scale_min) / scale_span * 100))
+                    return (
+                        f'<div class="pattern-side {tone}"><div class="pattern-side-top"><span class="pattern-side-label">{title}</span>'
+                        f'<span class="pattern-n">n={stats["n"]}</span></div>'
+                        f'<div class="pattern-median">{pattern_value(stats["median"])}</div>'
+                        f'<div class="pattern-range">{pattern_value(stats["q1"])} – {pattern_value(stats["q3"])} <span>· IQR</span></div>'
+                        f'<div class="pattern-track"><span class="pattern-iqr" style="left:{left:.1f}%;width:{max(1.5, right-left):.1f}%"></span>'
+                        f'<i class="pattern-marker" style="left:{marker:.1f}%"></i></div></div>'
+                    )
+
+                pattern_cards.append(
+                    '<div class="pattern-card"><div class="pattern-card-head"><span>' + label + '</span>'
+                    '<span class="pattern-card-tag">25TH–75TH PERCENTILE</span></div>'
+                    '<div class="pattern-compare">'
+                    + pattern_group_html("win", "WINNERS", "win")
+                    + pattern_group_html("loss", "LOSERS", "loss")
+                    + '</div></div>'
+                )
+
+            st.markdown(
+                """<style>
+                .pattern-heading{display:flex;justify-content:space-between;align-items:flex-end;gap:14px;margin:8px 0 16px}
+                .pattern-title{font-size:1.55rem;font-weight:900;letter-spacing:-.045em;color:#f2f8ff;margin-top:3px}
+                .pattern-subtitle{font-size:.82rem;color:#9bb6cb;margin-top:4px}
+                .pattern-counts{display:flex;gap:8px;flex-wrap:wrap}
+                .pattern-counts span{font-size:.65rem;font-weight:900;letter-spacing:.07em;padding:7px 10px;border-radius:999px}
+                .pattern-win-count{color:#75e4ac;background:rgba(57,231,145,.10);border:1px solid rgba(57,231,145,.28)}
+                .pattern-loss-count{color:#ff929b;background:rgba(255,91,99,.10);border:1px solid rgba(255,91,99,.28)}
+                .pattern-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+                .pattern-card{border:1px solid rgba(71,157,199,.30);border-radius:15px;padding:14px;background:linear-gradient(145deg,rgba(9,31,49,.96),rgba(4,17,31,.98));box-shadow:0 8px 24px rgba(0,0,0,.13);min-width:0}
+                .pattern-card-head{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-bottom:12px}
+                .pattern-card-head>span:first-child{font-size:.98rem;font-weight:850;color:#eef7ff}
+                .pattern-card-tag{font-size:.56rem;letter-spacing:.08em;color:#7f9eb5;border:1px solid rgba(127,158,181,.22);border-radius:999px;padding:4px 7px;white-space:nowrap}
+                .pattern-compare{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+                .pattern-side{border-radius:11px;padding:10px;min-width:0;background:rgba(255,255,255,.025)}
+                .pattern-side.win{border:1px solid rgba(57,231,145,.20)}
+                .pattern-side.loss{border:1px solid rgba(255,91,99,.20)}
+                .pattern-side-top{display:flex;justify-content:space-between;align-items:center;gap:5px}
+                .pattern-side-label{font-size:.61rem;letter-spacing:.09em;font-weight:900}
+                .win .pattern-side-label{color:#75e4ac}.loss .pattern-side-label{color:#ff929b}
+                .pattern-n{font-size:.61rem;color:#819bb0}
+                .pattern-median{font-size:1.28rem;line-height:1.35;font-weight:900;color:#f4f9ff;margin-top:5px;white-space:nowrap}
+                .pattern-range{font-size:.68rem;color:#a8bfd1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+                .pattern-range span{color:#718ca2;font-size:.61rem}
+                .pattern-track{height:5px;border-radius:99px;background:rgba(132,163,185,.14);position:relative;margin-top:12px;overflow:visible}
+                .pattern-iqr{position:absolute;height:5px;border-radius:99px;top:0}
+                .win .pattern-iqr{background:#39c98a}.loss .pattern-iqr{background:#e66d7a}
+                .pattern-marker{position:absolute;top:-3px;width:3px;height:11px;border-radius:2px;background:#f3f8ff;transform:translateX(-50%);box-shadow:0 0 5px rgba(255,255,255,.35)}
+                .pattern-no-data{font-size:.78rem;color:#8299ad;padding:12px 0}
+                @media(max-width:760px){.pattern-heading{align-items:flex-start;flex-direction:column}.pattern-grid{grid-template-columns:1fr}.pattern-card{padding:12px}.pattern-median{font-size:1.15rem}}
+                </style>
+                <div class="pattern-grid">""" + "".join(pattern_cards) + "</div>",
+                unsafe_allow_html=True
+            )
             if min(winner_n, loser_n) < 5:
                 st.warning(f"Early read only: {winner_n} winners and {loser_n} losers. These ranges are unstable with small samples and are not trading thresholds.")
             else:
