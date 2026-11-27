@@ -20,39 +20,44 @@ st_autorefresh(interval=7200000, key="pingr_archive_auto_refresh")
 st.markdown("""
 <style>
 :root{--bg:#070b14;--panel:#101b2c;--line:rgba(133,170,210,.18);--muted:#9aabc1;--text:#f3f7ff;--cyan:#35d9f5;--lime:#b7f36b;--violet:#9b8cff;--green:#42e0a5;--red:#ff718d}
-.stApp{background:radial-gradient(ellipse at 8% -5%,rgba(22,191,220,.20),transparent 32%),radial-gradient(ellipse at 96% 0%,rgba(117,92,255,.18),transparent 30%),linear-gradient(180deg,#080e1a 0%,#070b14 55%,#090f1c 100%);color:var(--text)}
-.stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.16;background-image:linear-gradient(rgba(145,170,205,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(145,170,205,.07) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,black,transparent 78%)}
-.block-container{max-width:1680px;padding:1.25rem 1.6rem 3rem;position:relative}
-[data-testid="stHeader"]{background:rgba(7,11,20,.72);backdrop-filter:blur(14px)}
-[data-testid="stSidebar"]{background:linear-gradient(180deg,#0b1627,#080f1b);border-right:1px solid var(--line)}
+.stApp{background:radial-gradient(ellipse at 4% 0%,rgba(22,191,220,.17),transparent 28%),radial-gradient(ellipse at 96% 4%,rgba(117,92,255,.20),transparent 30%),linear-gradient(145deg,#080e1a 0%,#070b14 48%,#0b1020 100%);color:var(--text)}
+.stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.10;background-image:linear-gradient(rgba(145,170,205,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(145,170,205,.07) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,black,transparent 72%)}
+.block-container{max-width:1740px;padding:1rem 1.55rem 3rem;position:relative}
+[data-testid="stHeader"]{background:rgba(7,11,20,.70);backdrop-filter:blur(18px)}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#0c192b,#080f1b);border-right:1px solid rgba(88,145,190,.22)}
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{color:var(--text)}
-h1,h2,h3{letter-spacing:-.04em;color:var(--text)}
-.pingr-title{font-size:clamp(2rem,4vw,3.25rem);font-weight:900;letter-spacing:-.075em;margin:.1rem 0 .2rem;color:#f7fbff;text-shadow:0 5px 30px rgba(40,210,245,.12)}
-.pingr-title span{background:linear-gradient(100deg,var(--cyan),#91a5ff 60%,var(--lime));-webkit-background-clip:text;background-clip:text;color:transparent}
-.pingr-eyebrow{color:var(--lime);text-transform:uppercase;letter-spacing:.22em;font-size:.67rem;font-weight:900;margin-top:.5rem}
-.pingr-subtitle{color:#a8b8ce;font-size:.93rem;margin:.3rem 0 .85rem;letter-spacing:.01em}
-.pingr-rule{height:2px;background:linear-gradient(90deg,var(--cyan),rgba(155,140,255,.65),rgba(183,243,107,0));margin:.9rem 0 1.4rem;border-radius:8px;box-shadow:0 0 22px rgba(53,217,245,.18)}
-h2{font-size:1.28rem!important;margin:1.1rem 0 .7rem!important;font-weight:800!important}
-h3{font-size:1.02rem!important;font-weight:750!important}
-[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(19,36,58,.96),rgba(12,23,39,.98));border:1px solid rgba(113,163,204,.23);border-radius:17px;padding:15px 17px;box-shadow:0 12px 34px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.035);min-height:102px;transition:transform .18s ease,border-color .18s ease}
-[data-testid="stMetric"]:hover{transform:translateY(-2px);border-color:rgba(53,217,245,.55)}
-[data-testid="stMetricLabel"]{color:#a8bbd2;font-size:.76rem;letter-spacing:.055em;text-transform:uppercase;font-weight:750}
-[data-testid="stMetricValue"]{color:#f4f8ff;font-weight:850;font-size:1.75rem;letter-spacing:-.055em}
+h1,h2,h3{letter-spacing:-.045em;color:var(--text)}
+.pingr-hero{position:relative;overflow:hidden;padding:27px 30px 25px;border:1px solid rgba(91,174,218,.26);border-radius:24px;background:linear-gradient(112deg,rgba(13,34,54,.96),rgba(17,22,48,.94) 58%,rgba(29,24,61,.88));box-shadow:0 22px 65px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);margin:.25rem 0 1.35rem}
+.pingr-hero:after{content:"";position:absolute;width:340px;height:340px;right:-100px;top:-205px;border-radius:50%;background:radial-gradient(circle,rgba(53,217,245,.22),rgba(155,140,255,.08) 48%,transparent 70%);pointer-events:none}
+.pingr-eyebrow{color:var(--lime);text-transform:uppercase;letter-spacing:.2em;font-size:.66rem;font-weight:900;margin:0 0 .65rem}
+.pingr-title{font-size:clamp(2rem,4vw,3.1rem);font-weight:950;letter-spacing:-.08em;margin:0;color:#f7fbff;line-height:1.04}
+.pingr-title span{background:linear-gradient(100deg,var(--cyan),#a4b2ff 58%,var(--lime));-webkit-background-clip:text;background-clip:text;color:transparent}
+.pingr-subtitle{color:#b2c2d8;font-size:.93rem;margin:.65rem 0 0;letter-spacing:.01em}
+.pingr-hero-meta{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}
+.pingr-chip{display:inline-block;padding:6px 11px;border:1px solid rgba(137,177,212,.22);border-radius:999px;background:rgba(5,13,25,.35);color:#c4d3e7;font-size:.72rem;font-weight:750;letter-spacing:.02em}
+h2{font-size:1.22rem!important;margin:1rem 0 .75rem!important;font-weight:850!important}
+h3{font-size:1rem!important;font-weight:800!important}
+[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(20,40,64,.96),rgba(11,22,39,.98));border:1px solid rgba(113,163,204,.24);border-radius:19px;padding:16px 18px;box-shadow:0 13px 32px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.045);min-height:108px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+[data-testid="stMetric"]:hover{transform:translateY(-3px);border-color:rgba(53,217,245,.55);box-shadow:0 17px 38px rgba(0,0,0,.27),0 0 24px rgba(53,217,245,.07)}
+[data-testid="stMetricLabel"]{color:#a9bfd7;font-size:.72rem;letter-spacing:.075em;text-transform:uppercase;font-weight:800}
+[data-testid="stMetricValue"]{color:#f4f8ff;font-weight:900;font-size:1.85rem;letter-spacing:-.06em}
 [data-testid="stMetricDelta"]{font-size:.76rem}
-div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:15px;background:rgba(13,25,42,.78);overflow:hidden}
-.stButton button,.stDownloadButton button{border-radius:11px;border:1px solid rgba(53,217,245,.32);min-height:42px;background:linear-gradient(110deg,rgba(25,71,94,.72),rgba(42,42,87,.72));color:#f3f8ff;font-weight:750;transition:all .18s ease}
-.stButton button:hover,.stDownloadButton button:hover{border-color:var(--cyan);box-shadow:0 0 22px rgba(53,217,245,.16);color:white}
-[data-testid="stDataFrame"]{border:1px solid rgba(133,170,210,.2);border-radius:13px;overflow:hidden;background:rgba(11,20,34,.72)}
-button[data-baseweb="tab"]{color:#a8bbd2!important;font-weight:750!important;padding:12px 16px!important}
-button[data-baseweb="tab"][aria-selected="true"]{color:#35d9f5!important;border-bottom:2px solid #35d9f5!important}
+div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:16px;background:rgba(13,25,42,.78);overflow:hidden}
+.stButton button,.stDownloadButton button{border-radius:12px;border:1px solid rgba(53,217,245,.34);min-height:43px;background:linear-gradient(110deg,rgba(25,71,94,.82),rgba(42,42,87,.82));color:#f3f8ff;font-weight:800;transition:all .18s ease}
+.stButton button:hover,.stDownloadButton button:hover{border-color:var(--cyan);box-shadow:0 0 22px rgba(53,217,245,.18);color:white}
+[data-testid="stDataFrame"]{border:1px solid rgba(133,170,210,.22);border-radius:15px;overflow:hidden;background:rgba(11,20,34,.76)}
+button[data-baseweb="tab"]{color:#9fb3cc!important;font-weight:800!important;padding:11px 15px!important;border:1px solid transparent!important;border-radius:12px 12px 0 0!important}
+button[data-baseweb="tab"][aria-selected="true"]{color:#45def5!important;background:rgba(36,91,119,.20)!important;border:1px solid rgba(53,217,245,.22)!important;border-bottom:2px solid #35d9f5!important}
 [data-testid="stTabs"] [data-baseweb="tab-list"]{gap:5px;border-bottom:1px solid rgba(133,170,210,.18);margin-bottom:18px;flex-wrap:wrap}
-[data-testid="stTabs"] [data-baseweb="tab-panel"]{padding-top:12px}
-[data-testid="stPlotlyChart"]{border:1px solid rgba(130,160,190,.16);border-radius:15px;background:rgba(10,22,37,.52);padding:5px}
-[data-testid="stAlert"]{border-radius:13px}
+[data-testid="stTabs"] [data-baseweb="tab-panel"]{padding-top:13px}
+[data-testid="stPlotlyChart"]{border:1px solid rgba(130,160,190,.20);border-radius:18px;background:linear-gradient(145deg,rgba(13,26,44,.82),rgba(9,17,31,.72));padding:7px;box-shadow:0 12px 32px rgba(0,0,0,.13)}
+[data-testid="stAlert"]{border-radius:14px}
 hr{border-color:rgba(133,170,210,.16)!important}
 .stCaption{color:#91a4bb}
-@media(max-width:900px){.block-container{padding:.8rem .8rem 1.7rem}.pingr-title{font-size:2rem}[data-testid="stMetric"]{padding:11px 12px;min-height:88px}[data-testid="stMetricValue"]{font-size:1.4rem}}
-@media(max-width:600px){.block-container{padding:.6rem .6rem 1.3rem}.pingr-title{font-size:1.75rem}[data-testid="stMetricLabel"]{font-size:.66rem}[data-testid="stMetricValue"]{font-size:1.18rem}}
+[data-testid="stSidebar"] [data-testid="stMetric"]{min-height:82px;padding:12px 14px}
+[data-testid="stSidebar"] [data-testid="stMetricValue"]{font-size:1.45rem}
+@media(max-width:900px){.block-container{padding:.75rem .8rem 1.7rem}.pingr-hero{padding:22px 21px;border-radius:19px}.pingr-title{font-size:2.25rem}[data-testid="stMetric"]{padding:11px 12px;min-height:88px}[data-testid="stMetricValue"]{font-size:1.4rem}}
+@media(max-width:600px){.block-container{padding:.55rem .55rem 1.3rem}.pingr-hero{padding:18px 16px}.pingr-title{font-size:1.9rem}[data-testid="stMetricLabel"]{font-size:.66rem}[data-testid="stMetricValue"]{font-size:1.18rem}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -480,9 +485,16 @@ else:
 latest_time = latest_df["_ts"].max() if not latest_df.empty else pd.NaT
 latest_time_pak = latest_time.tz_convert("Asia/Karachi").strftime("%d %b %Y · %I:%M:%S %p PKT") if pd.notna(latest_time) else "Timestamp unavailable"
 
-st.markdown('<div class="pingr-eyebrow">PINGR · LIVE INTELLIGENCE</div>', unsafe_allow_html=True)
-st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
-st.markdown('<div class="pingr-subtitle">Decision-focused performance · Detector results · Coin intelligence · Latest archive activity</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+today_hero_label = datetime.now(ZoneInfo("Asia/Karachi")).strftime("%a · %d %b %Y")
+st.markdown(
+    f'<div class="pingr-hero"><div class="pingr-eyebrow">◈ PINGR / MARKET INTELLIGENCE WORKSPACE</div>'
+    f'<div class="pingr-title">PINGR <span>ANALYTICS</span></div>'
+    f'<div class="pingr-subtitle">Scanner performance · Signal quality · Coin intelligence</div>'
+    f'<div class="pingr-hero-meta"><span class="pingr-chip">◉ R2 CONNECTED</span>'
+    f'<span class="pingr-chip">▣ {today_hero_label} · PKT</span>'
+    f'<span class="pingr-chip">↻ 2-HOUR ARCHIVE CYCLE</span></div></div>',
+    unsafe_allow_html=True
+)
 
 # Keep the archive controls compact and out of the main analysis.
 st.sidebar.caption("Bucket: pingr · prefix: pingr/logs/")
@@ -515,6 +527,41 @@ with tab_overview:
         ("Average final return", f"{avg_return:+.2f}%" if pd.notna(avg_return) else "—"),
     ])
     st.caption(f'Latest alert record: {latest_alert_label} · {len(combined):,} unique events across {archive_status["loaded"]:,} archived files · {duplicate_count:,} duplicate rows removed')
+
+    chart_left, chart_right = st.columns([1, 1.35], gap="large")
+    with chart_left:
+        st.subheader("Outcome mix")
+        if closed_count:
+            outcome_mix = pd.DataFrame({"Outcome": ["Wins", "Losses", "Neutral"], "Alerts": [wins, losses, neutral]})
+            outcome_fig = px.pie(outcome_mix, names="Outcome", values="Alerts", hole=.70,
+                                 color="Outcome", color_discrete_map={"Wins":"#42e0a5","Losses":"#ff718d","Neutral":"#8294ad"})
+            outcome_fig.update_traces(textinfo="percent", textposition="inside",
+                                      marker=dict(line=dict(color="#0b1422", width=3)),
+                                      hovertemplate="%{label}: %{value}<extra></extra>")
+            outcome_fig.update_layout(template="plotly_dark", height=290, showlegend=True,
+                                      margin=dict(l=8,r=8,t=8,b=8), paper_bgcolor="rgba(0,0,0,0)",
+                                      plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#e8f1ff"),
+                                      legend=dict(orientation="h",y=-.08,x=.5,xanchor="center"))
+            st.plotly_chart(outcome_fig,use_container_width=True,config={"displayModeBar":False})
+        else:
+            st.info("Outcome distribution will appear when closed alert records are available.")
+    with chart_right:
+        st.subheader("Return distribution")
+        if closed_count:
+            return_fig = px.histogram(valid, x="final_percent", nbins=18,
+                                      labels={"final_percent":"Final return (%)"},
+                                      color_discrete_sequence=["#35d9f5"])
+            return_fig.update_layout(template="plotly_dark",height=290,
+                                     margin=dict(l=12,r=12,t=12,b=12),
+                                     paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
+                                     font=dict(color="#e8f1ff"),showlegend=False,
+                                     xaxis_title="Final return (%)",yaxis_title="Closed alerts",
+                                     bargap=.08)
+            return_fig.update_xaxes(gridcolor="rgba(150,180,210,.10)",zerolinecolor="rgba(255,255,255,.25)")
+            return_fig.update_yaxes(gridcolor="rgba(150,180,210,.10)")
+            st.plotly_chart(return_fig,use_container_width=True,config={"displayModeBar":False})
+        else:
+            st.info("Return distribution will appear when closed alert records are available.")
 
 with tab_scanner:
     # 2. Scanner intelligence — report only fields and event types actually present in the logs.
