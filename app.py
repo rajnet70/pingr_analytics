@@ -907,13 +907,12 @@ if active_page == "Overview":
                 if len(candidates) > 1 and abs(float(candidates.iloc[1]["_gap_seconds"]) - float(candidates.iloc[0]["_gap_seconds"])) < 0.001:
                     continue
                 nearest = candidates.iloc[0]
-                diagnostic = nearest.get("diagnostic", {})
-                if not isinstance(diagnostic, dict):
-                    diagnostic = {}
-                enriched.at[idx, "quality_volume_24h"] = diagnostic.get("volume_24h_quote_usdt", pd.NA)
-                enriched.at[idx, "quality_volume_5m"] = diagnostic.get("volume_spike_5m", pd.NA)
-                enriched.at[idx, "quality_volume_15m"] = diagnostic.get("volume_spike_15m", pd.NA)
-                enriched.at[idx, "quality_price_5m"] = diagnostic.get("price_change_5m_pct", pd.NA)
+                # prepare() flattens nested JSON with dots, so read the normalized
+                # diagnostic columns directly rather than expecting a nested dict.
+                enriched.at[idx, "quality_volume_24h"] = nearest.get("diagnostic.volume_24h_quote_usdt", pd.NA)
+                enriched.at[idx, "quality_volume_5m"] = nearest.get("diagnostic.volume_spike_5m", pd.NA)
+                enriched.at[idx, "quality_volume_15m"] = nearest.get("diagnostic.volume_spike_15m", pd.NA)
+                enriched.at[idx, "quality_price_5m"] = nearest.get("diagnostic.price_change_5m_pct", pd.NA)
 
             def first_numeric(frame, fields):
                 values = pd.Series(index=frame.index, dtype="float64")
