@@ -537,154 +537,154 @@ st.markdown(
     f'<div class="topline-right"><span class="live-pill"><i></i> R2 CONNECTED</span><span class="top-cycle">2-HOUR ARCHIVE CYCLE</span></div></div>',
     unsafe_allow_html=True
 )
-    closed_count = len(valid)
-    wins = int((valid["final_percent"] >= 1.0).sum()) if closed_count else 0
-    losses = int((valid["final_percent"] <= -0.5).sum()) if closed_count else 0
-    neutral = max(0, closed_count - wins - losses)
-    decisive = wins + losses
-    win_rate = wins / closed_count * 100 if closed_count else float("nan")
-    decisive_rate = wins / decisive * 100 if decisive else float("nan")
-    avg_return = pd.to_numeric(valid["final_percent"], errors="coerce").mean() if closed_count else float("nan")
-    latest_alert_time = alerts["_ts"].max() if not alerts.empty and "_ts" in alerts else pd.NaT
-    latest_alert_label = (latest_alert_time.tz_convert("Asia/Karachi").strftime("%d %b %Y, %H:%M PKT")
-                          if pd.notna(latest_alert_time) else "Timestamp unavailable")
+closed_count = len(valid)
+wins = int((valid["final_percent"] >= 1.0).sum()) if closed_count else 0
+losses = int((valid["final_percent"] <= -0.5).sum()) if closed_count else 0
+neutral = max(0, closed_count - wins - losses)
+decisive = wins + losses
+win_rate = wins / closed_count * 100 if closed_count else float("nan")
+decisive_rate = wins / decisive * 100 if decisive else float("nan")
+avg_return = pd.to_numeric(valid["final_percent"], errors="coerce").mean() if closed_count else float("nan")
+latest_alert_time = alerts["_ts"].max() if not alerts.empty and "_ts" in alerts else pd.NaT
+latest_alert_label = (latest_alert_time.tz_convert("Asia/Karachi").strftime("%d %b %Y, %H:%M PKT")
+                      if pd.notna(latest_alert_time) else "Timestamp unavailable")
 
-    overview_outcomes = latest_outcomes(outcomes)
-    classified = pd.DataFrame()
-    pattern_rows = []
-    winner_n = loser_n = 0
-    summary_df = pd.DataFrame()
-    liquidity_field = None
-    macd_fields = []
-    if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcomes.columns):
-        overview_outcomes = overview_outcomes.copy()
-        overview_outcomes["result"] = overview_outcomes["result"].astype(str).str.lower()
-        numeric_fields = [
-            "pnl_percent", "original_volume_5m", "original_price_change_5m",
-            "original_rsi_15m", "original_score", "original_liquidity",
-            "original_liquidity_usd", "original_quote_volume_24h",
-            "original_volume_24h", "original_turnover_24h"
-        ]
-        for field in numeric_fields:
-            if field in overview_outcomes:
-                overview_outcomes[field] = pd.to_numeric(overview_outcomes[field], errors="coerce")
-        liquidity_fields = [
-            col for col in overview_outcomes.columns
-            if any(token in col.lower() for token in ("liquidity", "quote_volume", "turnover_24h", "volume_24h"))
-            and pd.api.types.is_numeric_dtype(overview_outcomes[col])
-        ]
-        liquidity_field = next((col for col in liquidity_fields if "original" in col.lower()),
-                               liquidity_fields[0] if liquidity_fields else None)
-        indicator_fields = [
-            ("original_score", "Signal score"),
-            ("original_volume_5m", "5m volume ratio"),
-            ("original_price_change_5m", "5m price change %"),
-            ("original_rsi_15m", "15m RSI"),
+overview_outcomes = latest_outcomes(outcomes)
+classified = pd.DataFrame()
+pattern_rows = []
+winner_n = loser_n = 0
+summary_df = pd.DataFrame()
+liquidity_field = None
+macd_fields = []
+if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcomes.columns):
+    overview_outcomes = overview_outcomes.copy()
+    overview_outcomes["result"] = overview_outcomes["result"].astype(str).str.lower()
+    numeric_fields = [
+        "pnl_percent", "original_volume_5m", "original_price_change_5m",
+        "original_rsi_15m", "original_score", "original_liquidity",
+        "original_liquidity_usd", "original_quote_volume_24h",
+        "original_volume_24h", "original_turnover_24h"
+    ]
+    for field in numeric_fields:
+        if field in overview_outcomes:
+            overview_outcomes[field] = pd.to_numeric(overview_outcomes[field], errors="coerce")
+    liquidity_fields = [
+        col for col in overview_outcomes.columns
+        if any(token in col.lower() for token in ("liquidity", "quote_volume", "turnover_24h", "volume_24h"))
+        and pd.api.types.is_numeric_dtype(overview_outcomes[col])
+    ]
+    liquidity_field = next((col for col in liquidity_fields if "original" in col.lower()),
+                           liquidity_fields[0] if liquidity_fields else None)
+    indicator_fields = [
+        ("original_score", "Signal score"),
+        ("original_volume_5m", "5m volume ratio"),
+        ("original_price_change_5m", "5m price change %"),
+        ("original_rsi_15m", "15m RSI"),
+    ]
+    if liquidity_field:
+        indicator_fields.append((liquidity_field, "24h Quote Vol"))
+    macd_fields = [
+        (field, label) for field, label in [
+            ("original_macd_5m", "MACD 5m"),
+            ("original_macd_15m", "MACD 15m"),
+            ("original_macd_1h", "MACD 1h")
+        ] if field in overview_outcomes.columns
+    ]
+    classified = overview_outcomes[overview_outcomes["result"].isin(["win", "loss", "neutral"])].copy()
+    if not classified.empty:
+        classified["symbol"] = classified["symbol"].fillna("Unknown").astype(str)
+        summary_rows = []
+        for result_name, display_name in [("win", "Winners"), ("loss", "Losers"), ("neutral", "Neutral")]:
+            group = classified[classified["result"].eq(result_name)]
+            row = {"Group": display_name, "Alerts": len(group)}
+            if "pnl_percent" in group:
+                row["Median P&L %"] = group["pnl_percent"].median()
+            for field, label in indicator_fields:
+                if field in group:
+                    row[label] = pd.to_numeric(group[field], errors="coerce").median()
+            for field, label in macd_fields:
+                known = group[field].map(lambda value: isinstance(value, bool))
+                if known.any():
+                    row[label + " bullish %"] = group.loc[known, field].astype(bool).mean() * 100
+            summary_rows.append(row)
+        summary_df = pd.DataFrame(summary_rows)
+
+        def compact_volume(value):
+            if pd.isna(value):
+                return "—"
+            value = float(value)
+            if abs(value) >= 1_000_000_000:
+                return f"{value / 1_000_000_000:.2f}B"
+            if abs(value) >= 1_000_000:
+                return f"{value / 1_000_000:.1f}M"
+            if abs(value) >= 1_000:
+                return f"{value / 1_000:.1f}K"
+            return f"{value:.0f}"
+
+        pattern_specs = [
+            ("original_rsi_15m", "15m RSI", "number"),
+            ("original_volume_5m", "5m volume ratio", "multiple"),
+            ("original_score", "Signal score", "number"),
+            ("original_price_change_5m", "5m price change", "percent"),
         ]
         if liquidity_field:
-            indicator_fields.append((liquidity_field, "24h Quote Vol"))
-        macd_fields = [
-            (field, label) for field, label in [
-                ("original_macd_5m", "MACD 5m"),
-                ("original_macd_15m", "MACD 15m"),
-                ("original_macd_1h", "MACD 1h")
-            ] if field in overview_outcomes.columns
-        ]
-        classified = overview_outcomes[overview_outcomes["result"].isin(["win", "loss", "neutral"])].copy()
-        if not classified.empty:
-            classified["symbol"] = classified["symbol"].fillna("Unknown").astype(str)
-            summary_rows = []
-            for result_name, display_name in [("win", "Winners"), ("loss", "Losers"), ("neutral", "Neutral")]:
-                group = classified[classified["result"].eq(result_name)]
-                row = {"Group": display_name, "Alerts": len(group)}
-                if "pnl_percent" in group:
-                    row["Median P&L %"] = group["pnl_percent"].median()
-                for field, label in indicator_fields:
-                    if field in group:
-                        row[label] = pd.to_numeric(group[field], errors="coerce").median()
-                for field, label in macd_fields:
-                    known = group[field].map(lambda value: isinstance(value, bool))
-                    if known.any():
-                        row[label + " bullish %"] = group.loc[known, field].astype(bool).mean() * 100
-                summary_rows.append(row)
-            summary_df = pd.DataFrame(summary_rows)
-
-            def compact_volume(value):
-                if pd.isna(value):
-                    return "—"
-                value = float(value)
-                if abs(value) >= 1_000_000_000:
-                    return f"{value / 1_000_000_000:.2f}B"
-                if abs(value) >= 1_000_000:
-                    return f"{value / 1_000_000:.1f}M"
-                if abs(value) >= 1_000:
-                    return f"{value / 1_000:.1f}K"
-                return f"{value:.0f}"
-
-            pattern_specs = [
-                ("original_rsi_15m", "15m RSI", "number"),
-                ("original_volume_5m", "5m volume ratio", "multiple"),
-                ("original_score", "Signal score", "number"),
-                ("original_price_change_5m", "5m price change", "percent"),
-            ]
-            if liquidity_field:
-                pattern_specs.insert(1, (liquidity_field, "24h quote volume", "volume"))
-            winner_n = int(classified["result"].eq("win").sum())
-            loser_n = int(classified["result"].eq("loss").sum())
-            for field, label, kind in pattern_specs:
-                if field not in classified.columns:
+            pattern_specs.insert(1, (liquidity_field, "24h quote volume", "volume"))
+        winner_n = int(classified["result"].eq("win").sum())
+        loser_n = int(classified["result"].eq("loss").sum())
+        for field, label, kind in pattern_specs:
+            if field not in classified.columns:
+                continue
+            row = {"Pattern": label}
+            for result_name, prefix in [("win", "Winners"), ("loss", "Losers")]:
+                values = pd.to_numeric(classified.loc[classified["result"].eq(result_name), field], errors="coerce").dropna()
+                if values.empty:
+                    row[prefix] = "No data"
+                    row[prefix + " n"] = 0
                     continue
-                row = {"Pattern": label}
-                for result_name, prefix in [("win", "Winners"), ("loss", "Losers")]:
-                    values = pd.to_numeric(classified.loc[classified["result"].eq(result_name), field], errors="coerce").dropna()
-                    if values.empty:
-                        row[prefix] = "No data"
-                        row[prefix + " n"] = 0
-                        continue
-                    low, median, high = values.quantile([.25, .50, .75]).tolist()
-                    if kind == "volume":
-                        row[prefix] = f"{compact_volume(low)}–{compact_volume(high)} (med {compact_volume(median)})"
-                    elif kind == "percent":
-                        row[prefix] = f"{low:+.2f}%–{high:+.2f}% (med {median:+.2f}%)"
-                    elif kind == "multiple":
-                        row[prefix] = f"{low:.2f}×–{high:.2f}× (med {median:.2f}×)"
-                    else:
-                        row[prefix] = f"{low:.1f}–{high:.1f} (med {median:.1f})"
-                    row[prefix + " n"] = len(values)
-                pattern_rows.append(row)
+                low, median, high = values.quantile([.25, .50, .75]).tolist()
+                if kind == "volume":
+                    row[prefix] = f"{compact_volume(low)}–{compact_volume(high)} (med {compact_volume(median)})"
+                elif kind == "percent":
+                    row[prefix] = f"{low:+.2f}%–{high:+.2f}% (med {median:+.2f}%)"
+                elif kind == "multiple":
+                    row[prefix] = f"{low:.2f}×–{high:.2f}× (med {median:.2f}×)"
+                else:
+                    row[prefix] = f"{low:.1f}–{high:.1f} (med {median:.1f})"
+                row[prefix + " n"] = len(values)
+            pattern_rows.append(row)
 
-    # Rank symbols from closed tracked-alert records; do not invent symbol-level results.
-    if closed_count and "symbol" in valid.columns:
-        symbol_data = valid.copy()
-        symbol_data["final_percent"] = pd.to_numeric(symbol_data["final_percent"], errors="coerce")
-        symbol_data = symbol_data.dropna(subset=["symbol", "final_percent"])
-        symbol_rank = symbol_data.groupby("symbol").agg(
-            signals=("final_percent", "size"),
-            wins=("final_percent", lambda x: int((x >= 1.0).sum())),
-            losses=("final_percent", lambda x: int((x <= -.5).sum())),
-            median_pnl=("final_percent", "median"),
-        ).reset_index()
-        symbol_rank["avg_score"] = (
-            symbol_data.groupby("symbol")["signal_score"].mean().reindex(symbol_rank["symbol"]).to_numpy()
-            if "signal_score" in symbol_data else float("nan")
-        )
-        symbol_rank["decisive"] = symbol_rank["wins"] + symbol_rank["losses"]
-        symbol_rank["win_rate"] = (symbol_rank["wins"] / symbol_rank["decisive"].replace(0, pd.NA) * 100)
-        symbol_rank = symbol_rank.sort_values(["win_rate", "signals"], ascending=[False, False], na_position="last")
-        symbol_rank["Signal"] = "MIXED"
-        if "detector" in symbol_data:
-            direction = symbol_data.groupby("symbol")["detector"].agg(lambda x: str(x.mode().iloc[0]) if not x.mode().empty else "MIXED")
-            symbol_rank["Signal"] = symbol_rank["symbol"].map(direction).fillna("MIXED")
-        symbol_rank_view = symbol_rank.head(8).rename(columns={
-            "symbol":"Symbol", "signals":"Signals", "wins":"Wins", "losses":"Losses",
-            "win_rate":"Win Rate", "median_pnl":"Median P&L", "avg_score":"Score (Avg)"
-        })
-        symbol_rank_view = symbol_rank_view[["Symbol","Signal","Signals","Wins","Losses","Win Rate","Median P&L","Score (Avg)"]]
-        symbol_rank_view["Win Rate"] = symbol_rank_view["Win Rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
-        symbol_rank_view["Median P&L"] = symbol_rank_view["Median P&L"].map(lambda x: f"{x:+.2f}%")
-        symbol_rank_view["Score (Avg)"] = symbol_rank_view["Score (Avg)"].map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
-    else:
-        symbol_rank_view = pd.DataFrame()
+# Rank symbols from closed tracked-alert records; do not invent symbol-level results.
+if closed_count and "symbol" in valid.columns:
+    symbol_data = valid.copy()
+    symbol_data["final_percent"] = pd.to_numeric(symbol_data["final_percent"], errors="coerce")
+    symbol_data = symbol_data.dropna(subset=["symbol", "final_percent"])
+    symbol_rank = symbol_data.groupby("symbol").agg(
+        signals=("final_percent", "size"),
+        wins=("final_percent", lambda x: int((x >= 1.0).sum())),
+        losses=("final_percent", lambda x: int((x <= -.5).sum())),
+        median_pnl=("final_percent", "median"),
+    ).reset_index()
+    symbol_rank["avg_score"] = (
+        symbol_data.groupby("symbol")["signal_score"].mean().reindex(symbol_rank["symbol"]).to_numpy()
+        if "signal_score" in symbol_data else float("nan")
+    )
+    symbol_rank["decisive"] = symbol_rank["wins"] + symbol_rank["losses"]
+    symbol_rank["win_rate"] = (symbol_rank["wins"] / symbol_rank["decisive"].replace(0, pd.NA) * 100)
+    symbol_rank = symbol_rank.sort_values(["win_rate", "signals"], ascending=[False, False], na_position="last")
+    symbol_rank["Signal"] = "MIXED"
+    if "detector" in symbol_data:
+        direction = symbol_data.groupby("symbol")["detector"].agg(lambda x: str(x.mode().iloc[0]) if not x.mode().empty else "MIXED")
+        symbol_rank["Signal"] = symbol_rank["symbol"].map(direction).fillna("MIXED")
+    symbol_rank_view = symbol_rank.head(8).rename(columns={
+        "symbol":"Symbol", "signals":"Signals", "wins":"Wins", "losses":"Losses",
+        "win_rate":"Win Rate", "median_pnl":"Median P&L", "avg_score":"Score (Avg)"
+    })
+    symbol_rank_view = symbol_rank_view[["Symbol","Signal","Signals","Wins","Losses","Win Rate","Median P&L","Score (Avg)"]]
+    symbol_rank_view["Win Rate"] = symbol_rank_view["Win Rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+    symbol_rank_view["Median P&L"] = symbol_rank_view["Median P&L"].map(lambda x: f"{x:+.2f}%")
+    symbol_rank_view["Score (Avg)"] = symbol_rank_view["Score (Avg)"].map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
+else:
+    symbol_rank_view = pd.DataFrame()
 
 
 if active_page == "Overview":
