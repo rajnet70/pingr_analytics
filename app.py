@@ -913,7 +913,7 @@ if active_page == "Overview":
             vol15 = first_numeric(enriched, ["vol_ratio"])
             rsi15 = first_numeric(enriched, ["original_rsi_15m", "rsi_14"])
             price5 = first_numeric(enriched, ["original_price_change_5m"])
-            liquidity = first_numeric(enriched, ["original_volume_24h"])
+            liquidity = first_numeric(enriched, ["original_volume_24h", "volume_24h", "quote_volume_24h"])
             peak = first_numeric(enriched, ["peak_percent"])
             worst = first_numeric(enriched, ["worst_percent"])
             pnl = first_numeric(enriched, ["final_percent"])
