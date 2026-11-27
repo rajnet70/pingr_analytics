@@ -19,38 +19,38 @@ st_autorefresh(interval=7200000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
-:root{--bg:#070b14;--panel:#101b2c;--line:rgba(133,170,210,.18);--muted:#9aabc1;--text:#f3f7ff;--cyan:#35d9f5;--lime:#b7f36b;--violet:#9b8cff;--green:#42e0a5;--red:#ff718d}
-.stApp{background:radial-gradient(ellipse at 4% 0%,rgba(22,191,220,.17),transparent 28%),radial-gradient(ellipse at 96% 4%,rgba(117,92,255,.20),transparent 30%),linear-gradient(145deg,#080e1a 0%,#070b14 48%,#0b1020 100%);color:var(--text)}
+:root{--bg:#070b14;--panel:#101b2c;--line:rgba(133,170,210,.18);--muted:#9aabc1;--text:#f3f7ff;--cyan:#d89a52;--lime:#e8c77a;--violet:#b7a58a;--green:#63b7a4;--red:#d77c68}
+.stApp{background:radial-gradient(ellipse at 5% 0%,rgba(173,111,57,.14),transparent 28%),radial-gradient(ellipse at 95% 4%,rgba(89,132,115,.13),transparent 30%),linear-gradient(145deg,#171613 0%,#11110f 52%,#191713 100%);color:var(--text)}
 .stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.10;background-image:linear-gradient(rgba(145,170,205,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(145,170,205,.07) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,black,transparent 72%)}
 .block-container{max-width:1740px;padding:1rem 1.55rem 3rem;position:relative}
 [data-testid="stHeader"]{background:rgba(7,11,20,.70);backdrop-filter:blur(18px)}
-[data-testid="stSidebar"]{background:linear-gradient(180deg,#0c192b,#080f1b);border-right:1px solid rgba(88,145,190,.22)}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#211e19,#151411);border-right:1px solid rgba(194,158,112,.20)}
 [data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{color:var(--text)}
 h1,h2,h3{letter-spacing:-.045em;color:var(--text)}
-.pingr-hero{position:relative;overflow:hidden;padding:27px 30px 25px;border:1px solid rgba(91,174,218,.26);border-radius:24px;background:linear-gradient(112deg,rgba(13,34,54,.96),rgba(17,22,48,.94) 58%,rgba(29,24,61,.88));box-shadow:0 22px 65px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);margin:.25rem 0 1.35rem}
-.pingr-hero:after{content:"";position:absolute;width:340px;height:340px;right:-100px;top:-205px;border-radius:50%;background:radial-gradient(circle,rgba(53,217,245,.22),rgba(155,140,255,.08) 48%,transparent 70%);pointer-events:none}
+.pingr-hero{position:relative;overflow:hidden;padding:27px 30px 25px;border:1px solid rgba(201,157,102,.30);border-radius:24px;background:linear-gradient(112deg,rgba(43,38,30,.98),rgba(31,34,29,.96) 58%,rgba(40,35,28,.94));box-shadow:0 22px 65px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);margin:.25rem 0 1.35rem}
+.pingr-hero:after{content:"";position:absolute;width:340px;height:340px;right:-100px;top:-205px;border-radius:50%;background:radial-gradient(circle,rgba(216,154,82,.22),rgba(99,151,129,.09) 48%,transparent 70%);pointer-events:none}
 .pingr-eyebrow{color:var(--lime);text-transform:uppercase;letter-spacing:.2em;font-size:.66rem;font-weight:900;margin:0 0 .65rem}
 .pingr-title{font-size:clamp(2rem,4vw,3.1rem);font-weight:950;letter-spacing:-.08em;margin:0;color:#f7fbff;line-height:1.04}
-.pingr-title span{background:linear-gradient(100deg,var(--cyan),#a4b2ff 58%,var(--lime));-webkit-background-clip:text;background-clip:text;color:transparent}
-.pingr-subtitle{color:#b2c2d8;font-size:.93rem;margin:.65rem 0 0;letter-spacing:.01em}
+.pingr-title span{background:linear-gradient(100deg,#e5a65e,#e8d0a0 58%,#83b6a1);-webkit-background-clip:text;background-clip:text;color:transparent}
+.pingr-subtitle{color:#c6bba8;font-size:.93rem;margin:.65rem 0 0;letter-spacing:.01em}
 .pingr-hero-meta{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}
 .pingr-chip{display:inline-block;padding:6px 11px;border:1px solid rgba(137,177,212,.22);border-radius:999px;background:rgba(5,13,25,.35);color:#c4d3e7;font-size:.72rem;font-weight:750;letter-spacing:.02em}
 h2{font-size:1.22rem!important;margin:1rem 0 .75rem!important;font-weight:850!important}
 h3{font-size:1rem!important;font-weight:800!important}
-[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(20,40,64,.96),rgba(11,22,39,.98));border:1px solid rgba(113,163,204,.24);border-radius:19px;padding:16px 18px;box-shadow:0 13px 32px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.045);min-height:108px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
-[data-testid="stMetric"]:hover{transform:translateY(-3px);border-color:rgba(53,217,245,.55);box-shadow:0 17px 38px rgba(0,0,0,.27),0 0 24px rgba(53,217,245,.07)}
-[data-testid="stMetricLabel"]{color:#a9bfd7;font-size:.72rem;letter-spacing:.075em;text-transform:uppercase;font-weight:800}
+[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(48,43,35,.98),rgba(29,29,25,.99));border:1px solid rgba(190,153,108,.25);border-radius:19px;padding:16px 18px;box-shadow:0 13px 32px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.045);min-height:108px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
+[data-testid="stMetric"]:hover{transform:translateY(-3px);border-color:rgba(216,154,82,.58);box-shadow:0 17px 38px rgba(0,0,0,.27),0 0 24px rgba(216,154,82,.08)}
+[data-testid="stMetricLabel"]{color:#c1b6a4;font-size:.72rem;letter-spacing:.075em;text-transform:uppercase;font-weight:800}
 [data-testid="stMetricValue"]{color:#f4f8ff;font-weight:900;font-size:1.85rem;letter-spacing:-.06em}
 [data-testid="stMetricDelta"]{font-size:.76rem}
 div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:16px;background:rgba(13,25,42,.78);overflow:hidden}
-.stButton button,.stDownloadButton button{border-radius:12px;border:1px solid rgba(53,217,245,.34);min-height:43px;background:linear-gradient(110deg,rgba(25,71,94,.82),rgba(42,42,87,.82));color:#f3f8ff;font-weight:800;transition:all .18s ease}
-.stButton button:hover,.stDownloadButton button:hover{border-color:var(--cyan);box-shadow:0 0 22px rgba(53,217,245,.18);color:white}
+.stButton button,.stDownloadButton button{border-radius:12px;border:1px solid rgba(216,154,82,.38);min-height:43px;background:linear-gradient(110deg,rgba(103,69,39,.86),rgba(55,66,52,.88));color:#f3f8ff;font-weight:800;transition:all .18s ease}
+.stButton button:hover,.stDownloadButton button:hover{border-color:var(--cyan);box-shadow:0 0 22px rgba(216,154,82,.16);color:white}
 [data-testid="stDataFrame"]{border:1px solid rgba(133,170,210,.22);border-radius:15px;overflow:hidden;background:rgba(11,20,34,.76)}
 button[data-baseweb="tab"]{color:#9fb3cc!important;font-weight:800!important;padding:11px 15px!important;border:1px solid transparent!important;border-radius:12px 12px 0 0!important}
-button[data-baseweb="tab"][aria-selected="true"]{color:#45def5!important;background:rgba(36,91,119,.20)!important;border:1px solid rgba(53,217,245,.22)!important;border-bottom:2px solid #35d9f5!important}
+button[data-baseweb="tab"][aria-selected="true"]{color:#e5b36f!important;background:rgba(117,83,47,.20)!important;border:1px solid rgba(216,154,82,.24)!important;border-bottom:2px solid #d89a52!important}
 [data-testid="stTabs"] [data-baseweb="tab-list"]{gap:5px;border-bottom:1px solid rgba(133,170,210,.18);margin-bottom:18px;flex-wrap:wrap}
 [data-testid="stTabs"] [data-baseweb="tab-panel"]{padding-top:13px}
-[data-testid="stPlotlyChart"]{border:1px solid rgba(130,160,190,.20);border-radius:18px;background:linear-gradient(145deg,rgba(13,26,44,.82),rgba(9,17,31,.72));padding:7px;box-shadow:0 12px 32px rgba(0,0,0,.13)}
+[data-testid="stPlotlyChart"]{border:1px solid rgba(174,145,107,.20);border-radius:18px;background:linear-gradient(145deg,rgba(39,36,30,.82),rgba(25,25,22,.78));padding:7px;box-shadow:0 12px 32px rgba(0,0,0,.13)}
 [data-testid="stAlert"]{border-radius:14px}
 hr{border-color:rgba(133,170,210,.16)!important}
 .stCaption{color:#91a4bb}
@@ -528,40 +528,39 @@ with tab_overview:
     ])
     st.caption(f'Latest alert record: {latest_alert_label} · {len(combined):,} unique events across {archive_status["loaded"]:,} archived files · {duplicate_count:,} duplicate rows removed')
 
-    chart_left, chart_right = st.columns([1, 1.35], gap="large")
-    with chart_left:
-        st.subheader("Outcome mix")
-        if closed_count:
-            outcome_mix = pd.DataFrame({"Outcome": ["Wins", "Losses", "Neutral"], "Alerts": [wins, losses, neutral]})
-            outcome_fig = px.pie(outcome_mix, names="Outcome", values="Alerts", hole=.70,
-                                 color="Outcome", color_discrete_map={"Wins":"#42e0a5","Losses":"#ff718d","Neutral":"#8294ad"})
-            outcome_fig.update_traces(textinfo="percent", textposition="inside",
-                                      marker=dict(line=dict(color="#0b1422", width=3)),
-                                      hovertemplate="%{label}: %{value}<extra></extra>")
-            outcome_fig.update_layout(template="plotly_dark", height=290, showlegend=True,
-                                      margin=dict(l=8,r=8,t=8,b=8), paper_bgcolor="rgba(0,0,0,0)",
-                                      plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#e8f1ff"),
-                                      legend=dict(orientation="h",y=-.08,x=.5,xanchor="center"))
-            st.plotly_chart(outcome_fig,use_container_width=True,config={"displayModeBar":False})
-        else:
-            st.info("Outcome distribution will appear when closed alert records are available.")
-    with chart_right:
-        st.subheader("Return distribution")
-        if closed_count:
-            return_fig = px.histogram(valid, x="final_percent", nbins=18,
-                                      labels={"final_percent":"Final return (%)"},
-                                      color_discrete_sequence=["#35d9f5"])
-            return_fig.update_layout(template="plotly_dark",height=290,
-                                     margin=dict(l=12,r=12,t=12,b=12),
-                                     paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
-                                     font=dict(color="#e8f1ff"),showlegend=False,
-                                     xaxis_title="Final return (%)",yaxis_title="Closed alerts",
-                                     bargap=.08)
-            return_fig.update_xaxes(gridcolor="rgba(150,180,210,.10)",zerolinecolor="rgba(255,255,255,.25)")
-            return_fig.update_yaxes(gridcolor="rgba(150,180,210,.10)")
-            st.plotly_chart(return_fig,use_container_width=True,config={"displayModeBar":False})
-        else:
-            st.info("Return distribution will appear when closed alert records are available.")
+    st.subheader("Outcome mix")
+    if closed_count:
+        outcome_mix = pd.DataFrame({"Outcome": ["Wins", "Losses", "Neutral"], "Alerts": [wins, losses, neutral]})
+        outcome_fig = px.pie(outcome_mix, names="Outcome", values="Alerts", hole=.68,
+                             color="Outcome", color_discrete_map={"Wins":"#63b7a4","Losses":"#d77c68","Neutral":"#a99b83"})
+        outcome_fig.update_traces(textinfo="percent", textposition="inside",
+                                  marker=dict(line=dict(color="#191713", width=3)),
+                                  hovertemplate="%{label}: %{value}<extra></extra>")
+        outcome_fig.update_layout(template="plotly_dark", height=340, showlegend=True,
+                                  margin=dict(l=12,r=12,t=12,b=12), paper_bgcolor="rgba(0,0,0,0)",
+                                  plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#eee5d8"),
+                                  legend=dict(orientation="h",y=-.06,x=.5,xanchor="center"))
+        st.plotly_chart(outcome_fig,use_container_width=True,config={"displayModeBar":False})
+    else:
+        st.info("Outcome distribution will appear when closed alert records are available.")
+
+    st.divider()
+    st.subheader("Return distribution")
+    if closed_count:
+        return_fig = px.histogram(valid, x="final_percent", nbins=18,
+                                  labels={"final_percent":"Final return (%)"},
+                                  color_discrete_sequence=["#d89a52"])
+        return_fig.update_layout(template="plotly_dark",height=340,
+                                 margin=dict(l=12,r=12,t=12,b=12),
+                                 paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
+                                 font=dict(color="#eee5d8"),showlegend=False,
+                                 xaxis_title="Final return (%)",yaxis_title="Closed alerts",
+                                 bargap=.10)
+        return_fig.update_xaxes(gridcolor="rgba(205,180,145,.12)",zerolinecolor="rgba(232,199,122,.45)")
+        return_fig.update_yaxes(gridcolor="rgba(205,180,145,.12)")
+        st.plotly_chart(return_fig,use_container_width=True,config={"displayModeBar":False})
+    else:
+        st.info("Return distribution will appear when closed alert records are available." )
 
 with tab_scanner:
     # 2. Scanner intelligence — report only fields and event types actually present in the logs.
@@ -619,7 +618,7 @@ with tab_detectors:
         chart = perf_all.sort_values("avg_return", ascending=True)
         fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
                      text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
-                     color="avg_return", color_continuous_scale=["#fb7185", "#263b58", "#20d6a0"],
+                     color="avg_return", color_continuous_scale=["#d77c68", "#8b806c", "#63b7a4"],
                      labels={"avg_return": "Average final return", "detector": ""})
         fig.update_layout(template="plotly_dark", height=max(220, 65 * len(chart)),
                           margin=dict(l=8, r=12, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
