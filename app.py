@@ -14,8 +14,8 @@ from streamlit_autorefresh import st_autorefresh
 
 st.set_page_config(page_title="Pingr Analytics", page_icon="📊", layout="wide")
 
-# Poll the archive branch automatically; cached Git blobs prevent repeat downloads.
-st_autorefresh(interval=120000, key="pingr_archive_auto_refresh")
+# Refresh on the two-hour archive cadence; manual refresh remains available in the sidebar.
+st_autorefresh(interval=7200000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
@@ -171,7 +171,7 @@ if archive_status["errors"]:
         st.write(archive_status["errors"])
 else:
     st.sidebar.success("R2 archive read completed without file errors.")
-st.sidebar.caption("Today’s R2 files only · index refresh: 60 seconds · individual files cached by key, size and upload time.")
+st.sidebar.caption("Today’s R2 files only · automatic refresh: every 2 hours · individual files cached by key, size and upload time.")
 
 def parse_files(files):
     per_file, errors = {}, []
@@ -495,7 +495,7 @@ if st.sidebar.button("Refresh latest data", use_container_width=True):
 if archive_status["errors"]:
     with st.sidebar.expander(f'{len(archive_status["errors"])} file read errors'):
         st.write(archive_status["errors"])
-st.sidebar.caption("Auto-refresh: every 2 minutes")
+st.sidebar.caption("Auto-refresh: every 2 hours · use the manual refresh button above to check sooner.")
 
 # 1. Executive overview
 st.header("Executive overview")
