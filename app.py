@@ -922,8 +922,9 @@ if active_page == "Overview":
             quality["_quality_symbol"] = quality.get("symbol", pd.Series("", index=quality.index)).fillna("").astype(str)
             quality_fields = [
                 "quality_volume_24h", "quality_volume_5m", "quality_volume_15m",
-                "quality_price_5m", "quality_rsi_15m", "quality_macd_5m",
-                "quality_macd_15m", "quality_macd_1h"
+                "quality_price_5m", "quality_price_15m", "quality_rsi_15m",
+                "quality_macd_5m", "quality_macd_15m", "quality_macd_1h",
+                "quality_macd_detail_5m", "quality_macd_detail_15m", "quality_macd_detail_1h"
             ]
             for field in quality_fields:
                 enriched[field] = pd.NA
@@ -959,6 +960,7 @@ if active_page == "Overview":
                     enriched.at[idx, "quality_volume_5m"] = market.get("diagnostic.volume_spike_5m", pd.NA)
                     enriched.at[idx, "quality_volume_15m"] = market.get("diagnostic.volume_spike_15m", pd.NA)
                     enriched.at[idx, "quality_price_5m"] = market.get("diagnostic.price_change_5m_pct", pd.NA)
+                    enriched.at[idx, "quality_price_15m"] = market.get("diagnostic.price_change_15m_pct", pd.NA)
                     enriched.at[idx, "quality_market_match_status"] = "Matched market snapshot"
 
                 indicators = nearest_quality_snapshot(alert, "post_indicator_pre_rsi_gate")
@@ -967,6 +969,9 @@ if active_page == "Overview":
                     enriched.at[idx, "quality_macd_5m"] = indicators.get("diagnostic.macd_5m", pd.NA)
                     enriched.at[idx, "quality_macd_15m"] = indicators.get("diagnostic.macd_15m", pd.NA)
                     enriched.at[idx, "quality_macd_1h"] = indicators.get("diagnostic.macd_1h", pd.NA)
+                    enriched.at[idx, "quality_macd_detail_5m"] = indicators.get("diagnostic.macd_detail_5m", pd.NA)
+                    enriched.at[idx, "quality_macd_detail_15m"] = indicators.get("diagnostic.macd_detail_15m", pd.NA)
+                    enriched.at[idx, "quality_macd_detail_1h"] = indicators.get("diagnostic.macd_detail_1h", pd.NA)
                     enriched.at[idx, "quality_indicator_match_status"] = "Matched indicator snapshot"
 
             def first_numeric(frame, fields):
@@ -999,12 +1004,12 @@ if active_page == "Overview":
             winner_view["Alert time (PKT)"] = parsed_time.dt.tz_convert("Asia/Karachi").dt.strftime("%d %b · %H:%M:%S").fillna("—")
             winner_view["Symbol"] = enriched.get("symbol", pd.Series("Unknown", index=enriched.index)).fillna("Unknown")
             winner_view["Signal"] = enriched.get("detector", pd.Series("Unknown", index=enriched.index)).fillna("Unknown")
-            winner_view["Alert ID"] = enriched.get("matched_alert_id", pd.Series(pd.NA, index=enriched.index)).fillna("—")
 
             score = first_numeric(enriched, ["signal_score", "score", "original_score"])
             volume5 = first_numeric(enriched, ["original_volume_5m", "quality_volume_5m"])
             volume15 = first_numeric(enriched, ["vol_ratio", "quality_volume_15m"])
             price5 = first_numeric(enriched, ["original_price_change_5m", "quality_price_5m"])
+            price15 = first_numeric(enriched, ["original_price_change_15m", "quality_price_15m"])
             rsi15 = first_numeric(enriched, ["rsi_14", "rsi", "original_rsi_15m", "quality_rsi_15m"])
             liquidity = first_numeric(enriched, ["original_volume_24h", "original_quote_volume_24h", "original_turnover_24h", "quality_volume_24h"]).replace(0, float("nan"))
             pnl = first_numeric(enriched, ["final_percent"])
@@ -1016,13 +1021,18 @@ if active_page == "Overview":
             winner_view["5m volume ratio"] = volume5.map(lambda x: f"{x:.2f}×" if pd.notna(x) else "—")
             winner_view["15m volume ratio"] = volume15.map(lambda x: f"{x:.2f}×" if pd.notna(x) else "—")
             winner_view["5m price change"] = price5.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
+            winner_view["15m price change"] = price15.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
             winner_view["15m RSI"] = rsi15.map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
             for field, label in [
                 ("macd_5m", "MACD 5m"),
                 ("macd_15m", "MACD 15m"),
                 ("macd_1h", "MACD 1h"),
             ]:
-                macd = first_source(enriched, [field, "original_" + field, "quality_" + field])
+                tf = field.removeprefix("macd_")
+                macd = first_source(enriched, [
+                    field, "original_" + field, "macd_bullish_" + tf,
+                    "macd_" + tf + "_flag", "quality_" + field
+                ])
                 winner_view[label] = macd.map(format_bool)
             winner_view["24h quote liquidity (USDT)"] = liquidity.map(
                 lambda x: compact_volume(x) if pd.notna(x) else "Not captured"
@@ -1036,8 +1046,8 @@ if active_page == "Overview":
             winner_view["_sort_pnl"] = pnl
             winner_view = winner_view.sort_values("_sort_pnl", ascending=False, na_position="last").drop(columns=["_sort_pnl"])
             winner_columns = [
-                "Alert time (PKT)", "Symbol", "Signal", "Alert ID", "Score",
-                "5m volume ratio", "15m volume ratio", "5m price change", "15m RSI",
+                "Alert time (PKT)", "Symbol", "Signal", "Score",
+                "5m volume ratio", "15m volume ratio", "5m price change", "15m price change", "15m RSI",
                 "MACD 5m", "MACD 15m", "MACD 1h", "24h quote liquidity (USDT)",
                 "Peak move", "Worst move", "Final P&L", "Minutes held", "Exit reason"
             ]
@@ -1059,7 +1069,6 @@ if active_page == "Overview":
             for row_number, (_, record) in enumerate(winner_view.iterrows(), 1):
                 identity = [
                     ("Alert time (PKT)", record.get("Alert time (PKT)", "—")),
-                    ("Alert ID", record.get("Alert ID", "—")),
                     ("Signal", record.get("Signal", "—")),
                     ("Score", record.get("Score", "—")),
                 ]
@@ -1067,6 +1076,7 @@ if active_page == "Overview":
                     ("5m volume ratio", record.get("5m volume ratio", "—")),
                     ("15m volume ratio", record.get("15m volume ratio", "—")),
                     ("5m price change", record.get("5m price change", "—")),
+                    ("15m price change", record.get("15m price change", "—")),
                     ("15m RSI", record.get("15m RSI", "—")),
                     ("MACD 5m", record.get("MACD 5m", "—")),
                     ("MACD 15m", record.get("MACD 15m", "—")),
