@@ -20,6 +20,12 @@ st_autorefresh(interval=7200000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
+/* Prevent mobile viewport/page-level horizontal overflow. */
+html,body{width:100%!important;max-width:100vw!important;overflow-x:hidden!important;box-sizing:border-box!important}
+.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"],[data-testid="stMainBlockContainer"],.block-container{width:100%!important;max-width:100vw!important;min-width:0!important;overflow-x:hidden!important;box-sizing:border-box!important}
+.winner-ledger,.winner-card,.winner-fields,.winner-field{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.winner-card{overflow-wrap:anywhere}
+@media(max-width:767px){.block-container{padding-left:10px!important;padding-right:10px!important}.winner-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.winner-card{margin-left:0!important;margin-right:0!important}}
 :root{--bg:#030b16;--panel:#071a2b;--panel2:#0a2238;--line:rgba(22,177,238,.48);--cyan:#16c9f5;--blue:#168bd0;--ice:#91e8ff;--green:#39e75f;--red:#ff5b63;--muted:#9bb6cb;--text:#f2f8ff}
 .stApp{background:radial-gradient(ellipse at 76% -8%,rgba(0,173,237,.20),transparent 36%),linear-gradient(145deg,#020813,#06182a 58%,#020b17);color:var(--text)}
 .stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.10;background:repeating-radial-gradient(circle at 0% 82%,transparent 0 26px,rgba(22,201,245,.55) 27px 28px,transparent 29px 43px);mask-image:linear-gradient(90deg,black,transparent 24%)}
@@ -385,12 +391,14 @@ def latest_outcomes(outcomes):
 
 
 
-def enrich_alert_records_with_outcomes(alert_records, outcomes, tolerance_seconds=15):
+def enrich_alert_records_with_outcomes(alert_records, outcomes, tolerance_seconds=180):
     """
     Attach outcome data only when an alert_record can be uniquely linked.
-    Build 4.4.1 creates alert_id as SYMBOL_<unix-seconds>; alert_record stores
-    alert_time but omits alert_id. We therefore require exact symbol plus a
-    unique alert_id epoch within a narrow time window. Symbol-only joins are forbidden.
+    Build 4.4.1 creates alert_id as SYMBOL_<unix-seconds> immediately before
+    Discord dispatch; build_alert_record captures alert_time after dispatch and
+    additional market-data lookups. A 15-second tolerance can therefore miss
+    the correct outcome. Allow up to 180 seconds, but still require exact symbol,
+    one unique candidate ID, and one-to-one ID usage. Symbol-only joins are forbidden.
     """
     base = alert_records.copy().reset_index(drop=True)
     latest = latest_outcomes(outcomes)
