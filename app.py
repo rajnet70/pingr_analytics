@@ -685,20 +685,21 @@ st.markdown(
     f'<div class="topline-right"><span class="live-pill"><i></i> R2 CONNECTED</span><span class="top-cycle">2-HOUR ARCHIVE CYCLE</span></div></div>',
     unsafe_allow_html=True
 )
-# The dashboard's winner/loser source of truth is the latest outcome per alert_id.
-# Do not classify alert_record rows by final_percent: those are a separate tracking stream.
+# The tracker ledger is the source of truth for the 13 closed winners.
+# alert_outcome contains separate 5m/15m/30m evaluations and must not replace
+# the final closed alert_record classification used by the dashboard KPIs.
 overview_outcomes = latest_outcomes(outcomes)
 outcome_results = overview_outcomes.get("result", pd.Series(dtype="object")).astype(str).str.lower()
 classified_outcomes = overview_outcomes[outcome_results.isin(["win", "loss", "neutral"])].copy()
-outcome_results = classified_outcomes.get("result", pd.Series(dtype="object")).astype(str).str.lower()
-closed_count = len(classified_outcomes)
-wins = int(outcome_results.eq("win").sum())
-losses = int(outcome_results.eq("loss").sum())
-neutral = int(outcome_results.eq("neutral").sum())
+closed_count = len(valid)
+tracker_returns = pd.to_numeric(valid.get("final_percent", pd.Series(dtype="float64")), errors="coerce")
+wins = int((tracker_returns >= 1.0).sum())
+losses = int((tracker_returns <= -0.5).sum())
+neutral = max(0, closed_count - wins - losses)
 decisive = wins + losses
 win_rate = wins / closed_count * 100 if closed_count else float("nan")
 decisive_rate = wins / decisive * 100 if decisive else float("nan")
-avg_return = pd.to_numeric(classified_outcomes.get("pnl_percent", pd.Series(dtype="float64")), errors="coerce").mean() if closed_count else float("nan")
+avg_return = tracker_returns.mean() if closed_count else float("nan")
 latest_alert_time = alerts["_ts"].max() if not alerts.empty and "_ts" in alerts else pd.NaT
 if pd.isna(latest_alert_time):
     latest_alert_time = latest_time
@@ -862,7 +863,7 @@ if active_page == "Overview":
             unsafe_allow_html=True
         )
         kpis = [
-            ("◉", "Evaluated Alerts", f"{closed_count:,}", "cyan"),
+            ("◉", "Total Signals", f"{len(alerts):,}", "cyan"),
             ("🏆", "Win Rate", f"{win_rate:.1f}%" if pd.notna(win_rate) else "—", "green"),
             ("◎", "Decisive Win Rate", f"{decisive_rate:.1f}%" if pd.notna(decisive_rate) else "—", "green"),
             ("↗", "Winners", f"{wins:,}", "green"),
@@ -874,89 +875,128 @@ if active_page == "Overview":
         )
         st.markdown(f'<div class="kpi-grid">{kpi_html}</div>', unsafe_allow_html=True)
 
-        # One row per latest evaluated winning alert_id. This is intentionally sourced
-        # directly from alert_outcome, not reconstructed from alert_record.
-        st.markdown('<div class="panel-title">Winners · verified outcome and signal intelligence</div>', unsafe_allow_html=True)
-        winning_alerts = classified_outcomes[
-            classified_outcomes["result"].astype(str).str.lower().eq("win")
-        ].copy() if not classified_outcomes.empty else pd.DataFrame()
+        # One row per closed tracker winner. Use alert_record for final P&L and
+        # its original indicators; enrich from alert_outcome and nearby R2 quality
+        # snapshots only when symbol AND event time establish a safe match.
+        st.markdown('<div class="panel-title">Winners · complete R2 signal and liquidity ledger</div>', unsafe_allow_html=True)
+        winner_returns = pd.to_numeric(valid.get("final_percent", pd.Series(dtype="float64")), errors="coerce")
+        winning_alerts = valid[winner_returns >= 1.0].copy() if not valid.empty else pd.DataFrame()
 
         if not winning_alerts.empty:
-            winner_view = pd.DataFrame(index=winning_alerts.index)
+            enriched = enrich_alert_records_with_outcomes(winning_alerts, outcomes)
 
-            # alert_id is SYMBOL_<unix-seconds>; this is the original alert time.
-            winner_ids = winning_alerts["alert_id"].astype(str)
-            alert_epochs = pd.to_numeric(winner_ids.str.extract(r"_(\d{10})$")[0], errors="coerce")
-            alert_times = pd.to_datetime(alert_epochs, unit="s", errors="coerce", utc=True)
-            winner_view["Alert time (PKT)"] = alert_times.dt.tz_convert("Asia/Karachi").dt.strftime("%d %b · %H:%M:%S").fillna("—")
-            winner_view["Symbol"] = winning_alerts.get("symbol", pd.Series("Unknown", index=winning_alerts.index)).fillna("Unknown")
-            winner_view["Alert ID"] = winner_ids
-            winner_view["Score label"] = winning_alerts.get("original_label", pd.Series("—", index=winning_alerts.index)).fillna("—")
+            # Match R2 signal_quality_snapshot only by same symbol and nearest
+            # timestamp within 180 seconds. Ties and distant snapshots are rejected.
+            quality = combined[combined.get("event_type", pd.Series(index=combined.index, dtype="object")).eq("signal_quality_snapshot")].copy()
+            quality["_quality_ts"] = pd.to_datetime(quality.get("timestamp", pd.Series(index=quality.index)), errors="coerce", utc=True)
+            enriched["quality_volume_24h"] = pd.NA
+            enriched["quality_volume_5m"] = pd.NA
+            enriched["quality_volume_15m"] = pd.NA
+            enriched["quality_price_5m"] = pd.NA
+            for idx, alert in enriched.iterrows():
+                alert_time = pd.to_datetime(alert.get("alert_time"), errors="coerce", utc=True)
+                if pd.isna(alert_time) or quality.empty:
+                    continue
+                candidates = quality[quality.get("symbol", pd.Series(index=quality.index, dtype="object")).astype(str).eq(str(alert.get("symbol", "")))].copy()
+                if candidates.empty:
+                    continue
+                candidates["_gap_seconds"] = (candidates["_quality_ts"] - alert_time).abs().dt.total_seconds()
+                candidates = candidates[candidates["_gap_seconds"].notna() & (candidates["_gap_seconds"] <= 180)].sort_values("_gap_seconds")
+                if candidates.empty:
+                    continue
+                if len(candidates) > 1 and abs(float(candidates.iloc[1]["_gap_seconds"]) - float(candidates.iloc[0]["_gap_seconds"])) < 0.001:
+                    continue
+                nearest = candidates.iloc[0]
+                diagnostic = nearest.get("diagnostic", {})
+                if not isinstance(diagnostic, dict):
+                    diagnostic = {}
+                enriched.at[idx, "quality_volume_24h"] = diagnostic.get("volume_24h_quote_usdt", pd.NA)
+                enriched.at[idx, "quality_volume_5m"] = diagnostic.get("volume_spike_5m", pd.NA)
+                enriched.at[idx, "quality_volume_15m"] = diagnostic.get("volume_spike_15m", pd.NA)
+                enriched.at[idx, "quality_price_5m"] = diagnostic.get("price_change_5m_pct", pd.NA)
 
-            def outcome_number(field):
-                if field not in winning_alerts.columns:
-                    return pd.Series(float("nan"), index=winning_alerts.index)
-                return pd.to_numeric(winning_alerts[field], errors="coerce")
+            def first_numeric(frame, fields):
+                values = pd.Series(index=frame.index, dtype="float64")
+                for field in fields:
+                    if field in frame.columns:
+                        values = values.combine_first(pd.to_numeric(frame[field], errors="coerce"))
+                return values
 
-            def outcome_bool(field):
-                if field not in winning_alerts.columns:
-                    return pd.Series("—", index=winning_alerts.index)
-                def render(value):
-                    if isinstance(value, bool):
-                        return "Bullish" if value else "Not bullish"
-                    if pd.isna(value):
-                        return "—"
-                    if str(value).strip().lower() in ("true", "1", "yes"):
-                        return "Bullish"
-                    if str(value).strip().lower() in ("false", "0", "no"):
-                        return "Not bullish"
+            def first_source(frame, fields):
+                values = pd.Series(index=frame.index, dtype="object")
+                for field in fields:
+                    if field in frame.columns:
+                        values = values.where(values.notna(), frame[field])
+                return values
+
+            def format_bool(value):
+                if isinstance(value, bool):
+                    return "Bullish" if value else "Not bullish"
+                if pd.isna(value):
                     return "—"
-                return winning_alerts[field].map(render)
+                if str(value).strip().lower() in ("true", "1", "yes"):
+                    return "Bullish"
+                if str(value).strip().lower() in ("false", "0", "no"):
+                    return "Not bullish"
+                return "—"
 
-            score = outcome_number("original_score")
-            volume5 = outcome_number("original_volume_5m")
-            price5 = outcome_number("original_price_change_5m")
-            rsi15 = outcome_number("original_rsi_15m")
-            liquidity = outcome_number("original_volume_24h").replace(0, float("nan"))
-            pnl = outcome_number("pnl_percent")
-            mfe = outcome_number("mfe_percent")
-            mae = outcome_number("mae_percent")
+            winner_view = pd.DataFrame(index=enriched.index)
+            parsed_time = pd.to_datetime(enriched.get("alert_time", pd.Series(index=enriched.index)), errors="coerce", utc=True)
+            winner_view["Alert time (PKT)"] = parsed_time.dt.tz_convert("Asia/Karachi").dt.strftime("%d %b · %H:%M:%S").fillna("—")
+            winner_view["Symbol"] = enriched.get("symbol", pd.Series("Unknown", index=enriched.index)).fillna("Unknown")
+            winner_view["Signal"] = enriched.get("detector", pd.Series("Unknown", index=enriched.index)).fillna("Unknown")
+            winner_view["Alert ID"] = enriched.get("matched_alert_id", pd.Series(pd.NA, index=enriched.index)).fillna("—")
 
-            winner_view["Signal score"] = score.map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
+            score = first_numeric(enriched, ["signal_score", "score", "original_score"])
+            volume5 = first_numeric(enriched, ["original_volume_5m", "quality_volume_5m"])
+            volume15 = first_numeric(enriched, ["vol_ratio", "quality_volume_15m"])
+            price5 = first_numeric(enriched, ["original_price_change_5m", "quality_price_5m"])
+            rsi15 = first_numeric(enriched, ["rsi_14", "rsi", "original_rsi_15m"])
+            liquidity = first_numeric(enriched, ["original_volume_24h", "quality_volume_24h"]).replace(0, float("nan"))
+            pnl = first_numeric(enriched, ["final_percent"])
+            peak = first_numeric(enriched, ["peak_percent"])
+            worst = first_numeric(enriched, ["worst_percent"])
+            held = first_numeric(enriched, ["minutes_held"])
+
+            winner_view["Score"] = score.map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
             winner_view["5m volume ratio"] = volume5.map(lambda x: f"{x:.2f}×" if pd.notna(x) else "—")
+            winner_view["15m volume ratio"] = volume15.map(lambda x: f"{x:.2f}×" if pd.notna(x) else "—")
             winner_view["5m price change"] = price5.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
             winner_view["15m RSI"] = rsi15.map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
-            winner_view["MACD 5m"] = outcome_bool("original_macd_5m")
-            winner_view["MACD 15m"] = outcome_bool("original_macd_15m")
-            winner_view["MACD 1h"] = outcome_bool("original_macd_1h")
+            for field, label in [
+                ("macd_5m", "MACD 5m"),
+                ("macd_15m", "MACD 15m"),
+                ("macd_1h", "MACD 1h"),
+            ]:
+                macd = first_source(enriched, [field, "original_" + field])
+                winner_view[label] = macd.map(format_bool)
             winner_view["24h quote liquidity (USDT)"] = liquidity.map(
-                lambda x: compact_volume(x) if pd.notna(x) else "Not recorded"
+                lambda x: compact_volume(x) if pd.notna(x) else "Not captured"
             )
-            winner_view["Entry price"] = outcome_number("entry_price").map(lambda x: f"{x:.8g}" if pd.notna(x) else "—")
-            winner_view["Exit price"] = outcome_number("exit_price").map(lambda x: f"{x:.8g}" if pd.notna(x) else "—")
+            winner_view["Peak move"] = peak.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
+            winner_view["Worst move"] = worst.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
             winner_view["Final P&L"] = pnl.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
-            winner_view["Peak move"] = mfe.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
-            winner_view["Worst move"] = mae.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
-            winner_view["Evaluation"] = winning_alerts.get("timeframe", pd.Series("—", index=winning_alerts.index)).fillna("—")
+            winner_view["Minutes held"] = held.map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
+            winner_view["Exit reason"] = enriched.get("exit_reason", pd.Series("—", index=enriched.index)).fillna("—")
 
             winner_view["_sort_pnl"] = pnl
             winner_view = winner_view.sort_values("_sort_pnl", ascending=False, na_position="last").drop(columns=["_sort_pnl"])
             winner_columns = [
-                "Alert time (PKT)", "Symbol", "Alert ID", "Score label", "Signal score",
-                "5m volume ratio", "5m price change", "15m RSI",
+                "Alert time (PKT)", "Symbol", "Signal", "Alert ID", "Score",
+                "5m volume ratio", "15m volume ratio", "5m price change", "15m RSI",
                 "MACD 5m", "MACD 15m", "MACD 1h", "24h quote liquidity (USDT)",
-                "Entry price", "Exit price", "Final P&L", "Peak move", "Worst move", "Evaluation"
+                "Peak move", "Worst move", "Final P&L", "Minutes held", "Exit reason"
             ]
             winner_view = winner_view[winner_columns]
             st.dataframe(winner_view, use_container_width=True, hide_index=True)
-            liquidity_count = int((winner_view["24h quote liquidity (USDT)"] != "Not recorded").sum())
+            liquidity_count = int((winner_view["24h quote liquidity (USDT)"] != "Not captured").sum())
             st.caption(
-                f"{len(winner_view)} winning alerts from the latest outcome per alert_id · "
-                f"{liquidity_count}/{len(winner_view)} with recorded 24h quote liquidity. "
-                "Every indicator is read from that same outcome record; missing source fields are not inferred."
+                f"{len(winner_view)} closed winning alert records · {liquidity_count}/{len(winner_view)} with 24h quote liquidity "
+                "from a linked outcome or same-symbol R2 quality snapshot within 3 minutes. "
+                "No symbol-only joins; unavailable source values remain explicitly marked."
             )
         else:
-            st.info("No winning alert_outcome records with a verified alert_id were found in today's archive.")
+            st.info("No closed winning alert records (final P&L ≥ +1%) were found in the current R2 archive.")
 
     # Compact insight strip from actual sample observations.
     insight_items=[]
