@@ -513,8 +513,8 @@ st.markdown(
 
 
 # High-level navigation: keep the primary intelligence visible without a long continuous scroll.
-tab_overview, tab_scanner, tab_detectors, tab_coins, tab_quality, tab_logs = st.tabs([
-    "Overview", "Scanner intelligence", "Detector performance", "Coin intelligence", "Signal quality", "Logs & diagnostics"
+tab_overview, tab_patterns, tab_scanner, tab_detectors, tab_coins, tab_quality, tab_logs = st.tabs([
+    "Overview", "Patterns", "Scanner intelligence", "Detector performance", "Coin intelligence", "Signal quality", "Logs & diagnostics"
 ])
 
 with tab_overview:
@@ -542,6 +542,12 @@ with tab_overview:
     # Winner vs loser intelligence from the dedicated outcome stream.
     st.subheader("Winners vs losers · what was different?")
     overview_outcomes = latest_outcomes(outcomes)
+    # Shared pattern results feed both the compact Overview panel and the dedicated Patterns page.
+    classified = pd.DataFrame()
+    pattern_rows = []
+    pattern_specs = []
+    winner_n = 0
+    loser_n = 0
     if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcomes.columns):
         overview_outcomes = overview_outcomes.copy()
         overview_outcomes["result"] = overview_outcomes["result"].astype(str).str.lower()
@@ -743,66 +749,17 @@ with tab_overview:
             if pattern_rows:
                 winner_n = int(classified["result"].eq("win").sum())
                 loser_n = int(classified["result"].eq("loss").sum())
-                st.markdown("**Winning vs losing indicator distributions**")
-                chart_specs = [
-                    (field, label, kind) for field, label, kind in pattern_specs
-                    if field in classified.columns and classified[field].notna().any()
-                ]
-                chart_palette = {"win":"#55c7a5","loss":"#f07888","neutral":"#7893aa"}
-                for field, label, kind in chart_specs:
-                    chart_data = classified[
-                        classified["result"].isin(["win", "loss"]) & classified[field].notna()
-                    ][["result", field]].copy()
-                    if chart_data.empty:
-                        continue
-                    chart_data["Outcome"] = chart_data["result"].map(
-                        {"win":"Winners", "loss":"Losers"}
-                    )
-                    chart_data[field] = pd.to_numeric(chart_data[field], errors="coerce")
-                    chart_data = chart_data.dropna(subset=[field])
-                    if chart_data.empty:
-                        continue
-                    if kind == "volume":
-                        axis_title = "24h quote volume (USD)"
-                        tick_format = "~s"
-                    elif kind == "multiple":
-                        axis_title = "Volume ratio (×)"
-                        tick_format = ".2f"
-                    elif kind == "percent":
-                        axis_title = "Price change (%)"
-                        tick_format = ".2f"
-                    else:
-                        axis_title = label
-                        tick_format = ".1f"
-                    pattern_fig = px.box(
-                        chart_data, x=field, y="Outcome", color="Outcome",
-                        points="all", notched=False,
-                        color_discrete_map={"Winners":chart_palette["win"],"Losers":chart_palette["loss"]},
-                        labels={field:axis_title,"Outcome":""},
-                        title=label
-                    )
-                    pattern_fig.update_layout(
-                        template="plotly_dark", height=265, showlegend=False,
-                        margin=dict(l=18,r=18,t=48,b=12),
-                        paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
-                        font=dict(color="#eaf5ff"),
-                        xaxis=dict(gridcolor="rgba(66,184,244,.12)",tickformat=tick_format),
-                        yaxis=dict(gridcolor="rgba(66,184,244,.08)")
-                    )
-                    pattern_fig.update_traces(
-                        marker=dict(size=8,opacity=.9,line=dict(width=1,color="#07111e")),
-                        line=dict(width=2)
-                    )
-                    st.plotly_chart(pattern_fig,use_container_width=True,config={"displayModeBar":False})
+                st.markdown("**Winner vs loser pattern snapshot**")
+                pattern_view = pd.DataFrame(pattern_rows).rename(columns={
+                    "Winners n": "Winner sample", "Losers n": "Loser sample"
+                })
+                st.dataframe(pattern_view, use_container_width=True, hide_index=True)
                 st.caption(
-                    f"Distribution charts use individual alert outcomes: {winner_n} winners and {loser_n} losers. "
-                    "Boxes show the middle 50% and median; points show individual alerts."
+                    f"Based on {winner_n} winning and {loser_n} losing evaluated alerts. "
+                    "Ranges show the middle 50% with the median; open Patterns for the detailed read."
                 )
                 if min(winner_n, loser_n) < 5:
-                    st.warning(
-                        f"Early read only: {winner_n} winners and {loser_n} losers. "
-                        "Small samples make these distributions unstable; do not treat them as trading thresholds."
-                    )
+                    st.warning("Early read only: one or both outcome groups have fewer than five observations. Treat these patterns as descriptive, not trading thresholds.")
                 else:
                     st.caption("Patterns are descriptive observations, not proof that an indicator caused an outcome.")
             else:
@@ -832,22 +789,50 @@ with tab_overview:
         st.info("Outcome distribution will appear when closed alert records are available.")
 
     st.divider()
-    st.subheader("Return distribution")
+    st.subheader("Return snapshot")
     if closed_count:
-        return_fig = px.histogram(valid, x="final_percent", nbins=18,
-                                  labels={"final_percent":"Final return (%)"},
-                                  color_discrete_sequence=["#42b8f4"])
-        return_fig.update_layout(template="plotly_dark",height=340,
-                                 margin=dict(l=12,r=12,t=12,b=12),
-                                 paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
-                                 font=dict(color="#eee5d8"),showlegend=False,
-                                 xaxis_title="Final return (%)",yaxis_title="Closed alerts",
-                                 bargap=.10)
-        return_fig.update_xaxes(gridcolor="rgba(66,184,244,.12)",zerolinecolor="rgba(66,184,244,.45)")
-        return_fig.update_yaxes(gridcolor="rgba(66,184,244,.12)")
-        st.plotly_chart(return_fig,use_container_width=True,config={"displayModeBar":False})
+        median_return = pd.to_numeric(valid["final_percent"], errors="coerce").median()
+        best_return = pd.to_numeric(valid["final_percent"], errors="coerce").max()
+        worst_return = pd.to_numeric(valid["final_percent"], errors="coerce").min()
+        metric_row([
+            ("Median final return", f"{median_return:+.2f}%" if pd.notna(median_return) else "—"),
+            ("Best final return", f"{best_return:+.2f}%" if pd.notna(best_return) else "—"),
+            ("Worst final return", f"{worst_return:+.2f}%" if pd.notna(worst_return) else "—"),
+        ])
     else:
-        st.info("Return distribution will appear when closed alert records are available." )
+        st.info("Return summary will appear when closed tracked-alert records are available.")
+
+with tab_patterns:
+    st.header("Patterns · winning conditions")
+    st.caption("Compare the middle 50% range and median for winning and losing alerts. These are observations from the current archive, not trading rules.")
+    if pattern_rows:
+        metric_row([
+            ("Winning sample", f"{winner_n:,}"),
+            ("Losing sample", f"{loser_n:,}"),
+            ("Indicators compared", f"{len(pattern_rows):,}"),
+        ])
+        pattern_detail = pd.DataFrame(pattern_rows).rename(columns={
+            "Winners n": "Winner sample", "Losers n": "Loser sample"
+        })
+        st.subheader("Indicator comparison")
+        st.dataframe(pattern_detail, use_container_width=True, hide_index=True)
+        st.subheader("How to read this")
+        st.markdown(
+            "- **Winners / Losers:** observed 25th–75th percentile ranges, with the median in parentheses.\n"
+            "- **Sample counts:** number of non-missing observations used for each indicator and outcome group.\n"
+            "- **No causal claim:** a difference in this sample does not prove that an indicator causes a better or worse result."
+        )
+        if min(winner_n, loser_n) < 5:
+            st.warning(
+                f"Small sample: {winner_n} winners and {loser_n} losers. "
+                "The ranges may move substantially as more outcomes arrive; do not use them as hard filters."
+            )
+        else:
+            st.success("Both outcome groups currently meet the five-observation minimum for an exploratory comparison; continue validating across more archive days.")
+        if not liquidity_field:
+            st.info("No explicit liquidity or 24h quote-volume field was found in these outcome records. The dashboard will not infer liquidity from short-term volume ratios.")
+    else:
+        st.info("No supported indicator comparisons are available yet. The page will populate when the archive contains usable alert_outcome records with indicator values and win/loss results.")
 
 with tab_scanner:
     # 2. Scanner intelligence — report only fields and event types actually present in the logs.
