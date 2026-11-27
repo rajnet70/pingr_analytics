@@ -708,92 +708,92 @@ with tab_patterns:
     st.header("Patterns · winning conditions")
     st.caption("Compare winning and losing signal conditions using actual evaluated alerts. No chart clutter—focus on readable comparisons, samples and evidence.")
     if not classified.empty and "symbol" in classified.columns:
-        st.subheader("Outcome profile")
-        st.caption("Median indicator readings at alert time, grouped by latest recorded outcome per alert ID.")
-        # A stacked, colour-coded scorecard makes the three outcome groups
-                    # easier to scan without reintroducing a two-column dashboard layout.
-                    st.markdown("""
-                    <style>
-                    .outcome-card{border:1px solid rgba(66,184,244,.22);border-radius:16px;padding:15px 17px;margin:9px 0;background:linear-gradient(110deg,rgba(12,31,51,.96),rgba(7,18,32,.96));}
-                    .outcome-card.win{border-left:4px solid #39e75f}
-                    .outcome-card.loss{border-left:4px solid #ff5b63}
-                    .outcome-card.neutral{border-left:4px solid #7893aa}
-                    .outcome-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;color:#edf7ff;font-weight:850;font-size:1rem}
-                    .outcome-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
-                    .outcome-metrics{display:flex;flex-wrap:wrap;gap:10px 24px}
-                    .outcome-metric{min-width:105px;flex:1}
-                    .outcome-label{font-size:.67rem;letter-spacing:.07em;text-transform:uppercase;color:#91a9c1;font-weight:750}
-                    .outcome-value{font-size:1.12rem;font-weight:850;color:#f3f9ff;margin-top:3px}
-                    </style>
-                    """, unsafe_allow_html=True)
-                    for _, card in summary_df.iterrows():
-                        group_name = str(card["Group"])
-                        css_group = {"Winners":"win","Losers":"loss","Neutral":"neutral"}.get(group_name,"neutral")
-                        dot_color = {"win":"#39e75f","loss":"#ff5b63","neutral":"#7893aa"}[css_group]
-                        metrics_html = [("Alerts", f'{int(card["Alerts"]):,}')]
-                        for col in summary_df.columns:
-                            if col in ("Group", "Alerts") or pd.isna(card[col]):
-                                continue
-                            value = card[col]
+st.subheader("Outcome profile")
+st.caption("Median indicator readings at alert time, grouped by latest recorded outcome per alert ID.")
+# A stacked, colour-coded scorecard makes the three outcome groups
+            # easier to scan without reintroducing a two-column dashboard layout.
+            st.markdown("""
+            <style>
+            .outcome-card{border:1px solid rgba(66,184,244,.22);border-radius:16px;padding:15px 17px;margin:9px 0;background:linear-gradient(110deg,rgba(12,31,51,.96),rgba(7,18,32,.96));}
+            .outcome-card.win{border-left:4px solid #39e75f}
+            .outcome-card.loss{border-left:4px solid #ff5b63}
+            .outcome-card.neutral{border-left:4px solid #7893aa}
+            .outcome-head{display:flex;align-items:center;gap:10px;margin-bottom:12px;color:#edf7ff;font-weight:850;font-size:1rem}
+            .outcome-dot{width:9px;height:9px;border-radius:50%;display:inline-block}
+            .outcome-metrics{display:flex;flex-wrap:wrap;gap:10px 24px}
+            .outcome-metric{min-width:105px;flex:1}
+            .outcome-label{font-size:.67rem;letter-spacing:.07em;text-transform:uppercase;color:#91a9c1;font-weight:750}
+            .outcome-value{font-size:1.12rem;font-weight:850;color:#f3f9ff;margin-top:3px}
+            </style>
+            """, unsafe_allow_html=True)
+            for _, card in summary_df.iterrows():
+                group_name = str(card["Group"])
+                css_group = {"Winners":"win","Losers":"loss","Neutral":"neutral"}.get(group_name,"neutral")
+                dot_color = {"win":"#39e75f","loss":"#ff5b63","neutral":"#7893aa"}[css_group]
+                metrics_html = [("Alerts", f'{int(card["Alerts"]):,}')]
+                for col in summary_df.columns:
+                    if col in ("Group", "Alerts") or pd.isna(card[col]):
+                        continue
+                    value = card[col]
+                    if col == "Liquidity / 24h volume":
+                        shown = compact_volume(value)
+                    elif col == "Median P&L %" or col.endswith("price change %"):
+                        shown = f"{float(value):+.2f}%"
+                    elif col.endswith("bullish %"):
+                        shown = f"{float(value):.0f}%"
+                    elif col == "15m RSI":
+                        shown = f"{float(value):.1f}"
+                    elif col in ("Signal score", "5m volume ratio"):
+                        shown = f"{float(value):.2f}×" if col == "5m volume ratio" else f"{float(value):.1f}"
+                    else:
+                        shown = f"{float(value):.2f}"
+                    metrics_html.append((col, shown))
+                metric_markup = "".join(
+                    f'<div class="outcome-metric"><div class="outcome-label">{label}</div><div class="outcome-value">{shown}</div></div>'
+                    for label, shown in metrics_html
+                )
+                st.markdown(
+                    f'<div class="outcome-card {css_group}"><div class="outcome-head"><span class="outcome-dot" style="background:{dot_color}"></span>{group_name}</div><div class="outcome-metrics">{metric_markup}</div></div>',
+                    unsafe_allow_html=True
+                )
+            st.caption("Median indicator readings at alert time, grouped by the latest recorded outcome per alert ID. Volume is shown in compact K/M/B units. MACD figures show the share marked bullish. This is descriptive, not proof that an indicator caused the result.")
+
+            symbol_cols = [col for col in [
+                "symbol", "result", "pnl_percent", "original_score",
+                "original_volume_5m", "original_rsi_15m", "original_price_change_5m"
+            ] if col in classified]
+            if liquidity_field and liquidity_field not in symbol_cols:
+                symbol_cols.append(liquidity_field)
+            if macd_fields:
+                symbol_cols.extend(field for field, _ in macd_fields if field not in symbol_cols)
+            symbol_view = classified[symbol_cols].copy()
+            symbol_view = symbol_view.rename(columns={
+                "symbol": "Symbol", "result": "Outcome", "pnl_percent": "P&L %",
+                "original_score": "Signal score", "original_volume_5m": "5m volume",
+                "original_rsi_15m": "15m RSI", "original_price_change_5m": "5m price change %",
+            })
+            if liquidity_field:
+                symbol_view = symbol_view.rename(columns={liquidity_field: "Liquidity / 24h volume"})
+            for field, label in macd_fields:
+                symbol_view = symbol_view.rename(columns={field: label})
+            winner_loser_tabs = st.tabs(["Winning symbols", "Losing symbols"])
+            for pane, result_name in zip(winner_loser_tabs, ["win", "loss"]):
+                with pane:
+                    subset = symbol_view[classified["result"].eq(result_name)].head(15)
+                    if subset.empty:
+                        st.info(f"No {result_name} outcomes in the current archive.")
+                    else:
+                        table_format = {}
+                        for col in subset.columns:
                             if col == "Liquidity / 24h volume":
-                                shown = compact_volume(value)
-                            elif col == "Median P&L %" or col.endswith("price change %"):
-                                shown = f"{float(value):+.2f}%"
-                            elif col.endswith("bullish %"):
-                                shown = f"{float(value):.0f}%"
+                                table_format[col] = compact_volume
+                            elif col == "P&L %" or col == "5m price change %":
+                                table_format[col] = lambda value: "—" if pd.isna(value) else f"{float(value):+.2f}%"
                             elif col == "15m RSI":
-                                shown = f"{float(value):.1f}"
-                            elif col in ("Signal score", "5m volume ratio"):
-                                shown = f"{float(value):.2f}×" if col == "5m volume ratio" else f"{float(value):.1f}"
-                            else:
-                                shown = f"{float(value):.2f}"
-                            metrics_html.append((col, shown))
-                        metric_markup = "".join(
-                            f'<div class="outcome-metric"><div class="outcome-label">{label}</div><div class="outcome-value">{shown}</div></div>'
-                            for label, shown in metrics_html
-                        )
-                        st.markdown(
-                            f'<div class="outcome-card {css_group}"><div class="outcome-head"><span class="outcome-dot" style="background:{dot_color}"></span>{group_name}</div><div class="outcome-metrics">{metric_markup}</div></div>',
-                            unsafe_allow_html=True
-                        )
-                    st.caption("Median indicator readings at alert time, grouped by the latest recorded outcome per alert ID. Volume is shown in compact K/M/B units. MACD figures show the share marked bullish. This is descriptive, not proof that an indicator caused the result.")
-        
-                    symbol_cols = [col for col in [
-                        "symbol", "result", "pnl_percent", "original_score",
-                        "original_volume_5m", "original_rsi_15m", "original_price_change_5m"
-                    ] if col in classified]
-                    if liquidity_field and liquidity_field not in symbol_cols:
-                        symbol_cols.append(liquidity_field)
-                    if macd_fields:
-                        symbol_cols.extend(field for field, _ in macd_fields if field not in symbol_cols)
-                    symbol_view = classified[symbol_cols].copy()
-                    symbol_view = symbol_view.rename(columns={
-                        "symbol": "Symbol", "result": "Outcome", "pnl_percent": "P&L %",
-                        "original_score": "Signal score", "original_volume_5m": "5m volume",
-                        "original_rsi_15m": "15m RSI", "original_price_change_5m": "5m price change %",
-                    })
-                    if liquidity_field:
-                        symbol_view = symbol_view.rename(columns={liquidity_field: "Liquidity / 24h volume"})
-                    for field, label in macd_fields:
-                        symbol_view = symbol_view.rename(columns={field: label})
-                    winner_loser_tabs = st.tabs(["Winning symbols", "Losing symbols"])
-                    for pane, result_name in zip(winner_loser_tabs, ["win", "loss"]):
-                        with pane:
-                            subset = symbol_view[classified["result"].eq(result_name)].head(15)
-                            if subset.empty:
-                                st.info(f"No {result_name} outcomes in the current archive.")
-                            else:
-                                table_format = {}
-                                for col in subset.columns:
-                                    if col == "Liquidity / 24h volume":
-                                        table_format[col] = compact_volume
-                                    elif col == "P&L %" or col == "5m price change %":
-                                        table_format[col] = lambda value: "—" if pd.isna(value) else f"{float(value):+.2f}%"
-                                    elif col == "15m RSI":
-                                        table_format[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.1f}"
-                                    elif col == "5m volume":
-                                        table_format[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.2f}×"
-                                st.dataframe(subset.style.format(table_format, na_rep="—"), use_container_width=True, hide_index=True)
+                                table_format[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.1f}"
+                            elif col == "5m volume":
+                                table_format[col] = lambda value: "—" if pd.isna(value) else f"{float(value):.2f}×"
+                        st.dataframe(subset.style.format(table_format, na_rep="—"), use_container_width=True, hide_index=True)
     else:
         st.info("No usable winner/loser outcome records are available in the current archive.")
 
