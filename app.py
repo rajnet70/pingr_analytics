@@ -920,7 +920,7 @@ if active_page == "Patterns":
             elif wmed > lmed:
                 recommendations.append((0, label, f"Winners show a higher median {label} than losers ({recommendation_value(wmed, kind)} vs {recommendation_value(lmed, kind)}). Review this as a candidate confirmation feature; validate on later alerts before changing any rule."))
             else:
-                recommendations.append((0, label, f"Winners show a lower median {label} than losers ({pattern_value(wmed)} vs {pattern_value(lmed)}). Review whether lower readings are associated with better outcomes; validate on later alerts before changing any rule."))
+                recommendations.append((0, label, f"Winners show a lower median {label} than losers ({recommendation_value(wmed, kind)} vs {recommendation_value(lmed, kind)}). Review whether lower readings are associated with better outcomes; validate on later alerts before changing any rule."))
 
         for priority, label, message in sorted(recommendations, key=lambda item: (item[0], item[1]))[:5]:
             st.markdown(f"**{label}** — {message}")
