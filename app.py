@@ -120,7 +120,9 @@ R2_FILE_URL = f"{R2_WORKER_URL}/dashboard/file"
 
 @st.cache_data(ttl=60, show_spinner=False)
 def r2_archive_index():
-    # Load every available compressed archive object from R2, across all dates.
+    # Safe operational mode: load only the current Pakistan-local date.
+    today = datetime.now(ZoneInfo("Asia/Karachi")).date()
+    date_path = f"/{today:%Y/%m/%d}/"
     objects = []
     cursor = None
     seen_cursors = set()
@@ -143,7 +145,7 @@ def r2_archive_index():
         seen_cursors.add(next_cursor)
         cursor = next_cursor
 
-    # Include every .gz log object returned by the paginated R2 index.
+    # Keep only today's compressed log objects; older R2 archives remain untouched.
     archives = [
         {
             "key": item["key"],
@@ -153,11 +155,12 @@ def r2_archive_index():
         }
         for item in objects
         if item.get("key", "").lower().endswith(".gz")
+        and date_path in f'/{item.get("key", "").lstrip("/")}'
     ]
     archives.sort(key=lambda item: (item.get("uploaded") or "", item["key"]))
     return archives, last_run
 
-@st.cache_data(ttl=3600, max_entries=1500, show_spinner=False)
+@st.cache_data(ttl=300, max_entries=40, show_spinner=False)
 def r2_archive_file(key, size, uploaded):
     response = requests.get(
         R2_FILE_URL,
@@ -170,7 +173,7 @@ def r2_archive_file(key, size, uploaded):
 def load_archive():
     objects, last_run = r2_archive_index()
     loaded, errors = [], []
-    with ThreadPoolExecutor(max_workers=8) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         jobs = {
             pool.submit(r2_archive_file, item["key"], item["size"], item.get("uploaded")): item
             for item in objects
@@ -204,7 +207,7 @@ with control_left:
 with control_right:
     st.markdown(
         f'<div style="padding:10px 14px;border:1px solid rgba(66,184,244,.18);border-radius:11px;background:rgba(8,24,40,.72);color:#a9c5da;font-size:.82rem">'
-        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; All available archive dates'
+        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; Today only: {today_label} PKT'
         f' &nbsp;·&nbsp; Auto-refresh every 2 hours &nbsp;·&nbsp; Bucket: pingr / pingr/logs/</div>',
         unsafe_allow_html=True
     )
@@ -496,7 +499,7 @@ def synopsis_observations(alerts, generic):
 
 
 if not uploads:
-    st.warning("No readable JSONL log files were found in today’s R2 archive yet.")
+    st.warning("No readable JSONL log files were found in today's R2 archive yet.")
     st.stop()
 
 per_file, combined_rows, errors, duplicate_count = parse_files(uploads)
