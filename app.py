@@ -120,7 +120,9 @@ R2_FILE_URL = f"{R2_WORKER_URL}/dashboard/file"
 
 @st.cache_data(ttl=60, show_spinner=False)
 def r2_archive_index():
-    # Discover every available archive date; file contents are processed one at a time.
+    # Restrict dashboard ingestion to the current Pakistan-local date.
+    today = datetime.now(ZoneInfo("Asia/Karachi")).date()
+    date_path = f"/{today:%Y/%m/%d}/"
     objects = []
     cursor = None
     seen_cursors = set()
@@ -143,7 +145,7 @@ def r2_archive_index():
         seen_cursors.add(next_cursor)
         cursor = next_cursor
 
-    # Include every compressed JSONL archive object across all dates.
+    # Include only compressed JSONL objects under today's Pakistan-local date folder.
     archives = [
         {
             "key": item["key"],
@@ -153,6 +155,7 @@ def r2_archive_index():
         }
         for item in objects
         if item.get("key", "").lower().endswith(".gz")
+        and date_path in f'/{item.get("key", "").lstrip("/")}'
     ]
     archives.sort(key=lambda item: (item.get("uploaded") or "", item["key"]))
     return archives, last_run
@@ -239,7 +242,7 @@ with control_left:
 with control_right:
     st.markdown(
         f'<div style="padding:10px 14px;border:1px solid rgba(66,184,244,.18);border-radius:11px;background:rgba(8,24,40,.72);color:#a9c5da;font-size:.82rem">'
-        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; All available archive dates'
+        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; Today only: {today_label} PKT'
         f' &nbsp;·&nbsp; Auto-refresh every 2 hours &nbsp;·&nbsp; Bucket: pingr / pingr/logs/</div>',
         unsafe_allow_html=True
     )
