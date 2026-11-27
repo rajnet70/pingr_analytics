@@ -4,6 +4,8 @@ import plotly.express as px
 import json
 import hashlib
 from io import BytesIO
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import os
 import base64
 import requests
@@ -44,7 +46,7 @@ div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:12px;ba
 
 st.markdown('<div class="pingr-eyebrow">Market intelligence workspace</div>', unsafe_allow_html=True)
 st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
-st.markdown('<div class="pingr-subtitle">Live Cloudflare R2 archive · Trading intelligence · Detector performance · Historical patterns</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-subtitle">Today’s Cloudflare R2 logs · Trading intelligence · Detector performance</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
 
 class ArchiveUpload(BytesIO):
@@ -61,6 +63,9 @@ R2_FILE_URL = f"{R2_WORKER_URL}/dashboard/file"
 
 @st.cache_data(ttl=60, show_spinner=False)
 def r2_archive_index():
+    # Current-day view only, using Pakistan local date.
+    today = datetime.now(ZoneInfo("Asia/Karachi")).date()
+    date_path = f"/{today:%Y/%m/%d}/"
     objects = []
     cursor = None
     seen_cursors = set()
@@ -83,6 +88,7 @@ def r2_archive_index():
         seen_cursors.add(next_cursor)
         cursor = next_cursor
 
+    # Keep only today's compressed log objects. Older R2 archives remain untouched.
     archives = [
         {
             "key": item["key"],
@@ -92,6 +98,7 @@ def r2_archive_index():
         }
         for item in objects
         if item.get("key", "").lower().endswith(".gz")
+        and date_path in f'/{item.get("key", "").lstrip("/")}'
     ]
     archives.sort(key=lambda item: (item.get("uploaded") or "", item["key"]))
     return archives, last_run
@@ -135,7 +142,7 @@ def load_archive():
     }
 
 st.sidebar.header("Live Cloudflare R2 archive")
-st.sidebar.caption("Source: Cloudflare R2 · bucket: pingr · prefix: pingr/logs/")
+st.sidebar.caption(f"Source: Cloudflare R2 · today only: {datetime.now(ZoneInfo(\"Asia/Karachi\")).strftime(\"%d %b %Y\")} PKT")
 if st.sidebar.button("Refresh archive now", use_container_width=True):
     st.cache_data.clear()
 try:
@@ -155,7 +162,7 @@ if archive_status["errors"]:
         st.write(archive_status["errors"])
 else:
     st.sidebar.success("R2 archive read completed without file errors.")
-st.sidebar.caption("R2 index refresh: 60 seconds. Individual objects cached by key, size and upload time.")
+st.sidebar.caption("Today’s R2 files only · index refresh: 60 seconds · individual files cached by key, size and upload time.")
 
 def parse_files(files):
     per_file, errors = {}, []
