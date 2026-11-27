@@ -922,9 +922,7 @@ if active_page == "Overview":
             quality["_quality_symbol"] = quality.get("symbol", pd.Series("", index=quality.index)).fillna("").astype(str)
             quality_fields = [
                 "quality_volume_24h", "quality_volume_5m", "quality_volume_15m",
-                "quality_price_5m", "quality_price_15m", "quality_rsi_15m",
-                "quality_macd_5m", "quality_macd_15m", "quality_macd_1h",
-                "quality_macd_detail_5m", "quality_macd_detail_15m", "quality_macd_detail_1h"
+                "quality_price_5m", "quality_price_15m", "quality_rsi_15m"
             ]
             for field in quality_fields:
                 enriched[field] = pd.NA
@@ -966,12 +964,6 @@ if active_page == "Overview":
                 indicators = nearest_quality_snapshot(alert, "post_indicator_pre_rsi_gate")
                 if indicators is not None:
                     enriched.at[idx, "quality_rsi_15m"] = indicators.get("diagnostic.rsi_15m", pd.NA)
-                    enriched.at[idx, "quality_macd_5m"] = indicators.get("diagnostic.macd_5m", pd.NA)
-                    enriched.at[idx, "quality_macd_15m"] = indicators.get("diagnostic.macd_15m", pd.NA)
-                    enriched.at[idx, "quality_macd_1h"] = indicators.get("diagnostic.macd_1h", pd.NA)
-                    enriched.at[idx, "quality_macd_detail_5m"] = indicators.get("diagnostic.macd_detail_5m", pd.NA)
-                    enriched.at[idx, "quality_macd_detail_15m"] = indicators.get("diagnostic.macd_detail_15m", pd.NA)
-                    enriched.at[idx, "quality_macd_detail_1h"] = indicators.get("diagnostic.macd_detail_1h", pd.NA)
                     enriched.at[idx, "quality_indicator_match_status"] = "Matched indicator snapshot"
 
             def first_numeric(frame, fields):
@@ -1005,13 +997,15 @@ if active_page == "Overview":
             winner_view["Symbol"] = enriched.get("symbol", pd.Series("Unknown", index=enriched.index)).fillna("Unknown")
             winner_view["Signal"] = enriched.get("detector", pd.Series("Unknown", index=enriched.index)).fillna("Unknown")
 
+            # Prefer exact fields from the R2 alert/outcome records, then fill gaps
+            # from the timestamp- and stage-matched R2 quality snapshots.
             score = first_numeric(enriched, ["signal_score", "score", "original_score"])
-            volume5 = first_numeric(enriched, ["original_volume_5m", "quality_volume_5m"])
-            volume15 = first_numeric(enriched, ["vol_ratio", "quality_volume_15m"])
-            price5 = first_numeric(enriched, ["original_price_change_5m", "quality_price_5m"])
-            price15 = first_numeric(enriched, ["original_price_change_15m", "quality_price_15m"])
-            rsi15 = first_numeric(enriched, ["rsi_14", "rsi", "original_rsi_15m", "quality_rsi_15m"])
-            liquidity = first_numeric(enriched, ["original_volume_24h", "original_quote_volume_24h", "original_turnover_24h", "quality_volume_24h"]).replace(0, float("nan"))
+            volume5 = first_numeric(enriched, ["original_volume_5m", "volume_spike_5m", "quality_volume_5m"])
+            volume15 = first_numeric(enriched, ["original_volume_15m", "volume_spike_15m", "vol_ratio", "quality_volume_15m"])
+            price5 = first_numeric(enriched, ["original_price_change_5m", "price_change_5m", "quality_price_5m"])
+            price15 = first_numeric(enriched, ["original_price_change_15m", "price_change_15m", "quality_price_15m"])
+            rsi15 = first_numeric(enriched, ["rsi_15m", "rsi_14", "rsi", "original_rsi_15m", "quality_rsi_15m"])
+            liquidity = first_numeric(enriched, ["original_volume_24h", "original_quote_volume_24h", "original_turnover_24h", "volume_24h_quote_usdt", "quality_volume_24h"]).replace(0, float("nan"))
             pnl = first_numeric(enriched, ["final_percent"])
             peak = first_numeric(enriched, ["peak_percent"])
             worst = first_numeric(enriched, ["worst_percent"])
@@ -1023,17 +1017,6 @@ if active_page == "Overview":
             winner_view["5m price change"] = price5.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
             winner_view["15m price change"] = price15.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
             winner_view["15m RSI"] = rsi15.map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
-            for field, label in [
-                ("macd_5m", "MACD 5m"),
-                ("macd_15m", "MACD 15m"),
-                ("macd_1h", "MACD 1h"),
-            ]:
-                tf = field.removeprefix("macd_")
-                macd = first_source(enriched, [
-                    field, "original_" + field, "macd_bullish_" + tf,
-                    "macd_" + tf + "_flag", "quality_" + field
-                ])
-                winner_view[label] = macd.map(format_bool)
             winner_view["24h quote liquidity (USDT)"] = liquidity.map(
                 lambda x: compact_volume(x) if pd.notna(x) else "Not captured"
             )
@@ -1048,7 +1031,7 @@ if active_page == "Overview":
             winner_columns = [
                 "Alert time (PKT)", "Symbol", "Signal", "Score",
                 "5m volume ratio", "15m volume ratio", "5m price change", "15m price change", "15m RSI",
-                "MACD 5m", "MACD 15m", "MACD 1h", "24h quote liquidity (USDT)",
+                "24h quote liquidity (USDT)",
                 "Peak move", "Worst move", "Final P&L", "Minutes held", "Exit reason"
             ]
             winner_view = winner_view[winner_columns]
@@ -1078,9 +1061,6 @@ if active_page == "Overview":
                     ("5m price change", record.get("5m price change", "—")),
                     ("15m price change", record.get("15m price change", "—")),
                     ("15m RSI", record.get("15m RSI", "—")),
-                    ("MACD 5m", record.get("MACD 5m", "—")),
-                    ("MACD 15m", record.get("MACD 15m", "—")),
-                    ("MACD 1h", record.get("MACD 1h", "—")),
                     ("24h quote liquidity (USDT)", record.get("24h quote liquidity (USDT)", "Not captured")),
                 ]
                 outcome_fields = [
