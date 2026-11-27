@@ -415,8 +415,10 @@ def enrich_alert_records_with_outcomes(alert_records, outcomes, tolerance_second
 
     id_usage = {}
     for ids in candidates_by_row.values():
-        if len(ids) == 1:
-            id_usage[ids[0]] = id_usage.get(ids[0], 0) + 1
+        # Count every possible claim, including candidates from ambiguous rows.
+        # This prevents another row from consuming an ID that is also ambiguous.
+        for alert_id in set(ids):
+            id_usage[alert_id] = id_usage.get(alert_id, 0) + 1
 
     outcome_fields = [
         col for col in latest.columns
