@@ -52,10 +52,6 @@ hr{border-color:rgba(133,170,210,.16)!important}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="pingr-eyebrow">◈ Market intelligence workspace · Today’s live session</div>', unsafe_allow_html=True)
-st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
-st.markdown('<div class="pingr-subtitle">Real-time scanner visibility <span style="color:#35d9f5">/</span> Signal intelligence <span style="color:#35d9f5">/</span> Performance analytics</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
-
 
 class ArchiveUpload(BytesIO):
     def __init__(self, name, content):
@@ -149,7 +145,7 @@ def load_archive():
         "objects": objects
     }
 
-st.sidebar.header("Live Cloudflare R2 archive")
+st.sidebar.header("R2 connection")
 today_label = datetime.now(ZoneInfo("Asia/Karachi")).strftime("%d %b %Y")
 st.sidebar.caption(f"Source: Cloudflare R2 · today only: {today_label} PKT")
 if st.sidebar.button("Refresh archive now", use_container_width=True):
@@ -171,7 +167,7 @@ if archive_status["errors"]:
         st.write(archive_status["errors"])
 else:
     st.sidebar.success("R2 archive read completed without file errors.")
-st.sidebar.caption("Today’s R2 files only · automatic refresh: every 2 hours · individual files cached by key, size and upload time.")
+st.sidebar.caption("Today’s R2 files only · automatic refresh every 2 hours · individual files cached by key, size and upload time.")
 
 def parse_files(files):
     per_file, errors = {}, []
@@ -448,7 +444,7 @@ def synopsis_observations(alerts, generic):
 
 
 if not uploads:
-    st.warning("No readable JSONL log files were found on the archive branch yet.")
+    st.warning("No readable JSONL log files were found in today’s R2 archive yet.")
     st.stop()
 
 per_file, combined_rows, errors, duplicate_count = parse_files(uploads)
@@ -485,17 +481,9 @@ st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_
 st.markdown('<div class="pingr-subtitle">Decision-focused performance · Detector results · Coin intelligence · Latest archive activity</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
 # Keep the archive controls compact and out of the main analysis.
-st.sidebar.header("Data connection")
-st.sidebar.caption("Cloudflare R2 · bucket pingr · prefix pingr/logs/")
-st.sidebar.metric("Log files loaded", f'{archive_status["loaded"]:,}')
-st.sidebar.caption(f'Newest file in archive: {archive_status["updated"]}')
-if st.sidebar.button("Refresh latest data", use_container_width=True):
-    st.cache_data.clear()
-    st.rerun()
-if archive_status["errors"]:
-    with st.sidebar.expander(f'{len(archive_status["errors"])} file read errors'):
-        st.write(archive_status["errors"])
-st.sidebar.caption("Auto-refresh: every 2 hours · use the manual refresh button above to check sooner.")
+st.sidebar.caption("Bucket: pingr · prefix: pingr/logs/")
+st.sidebar.caption("Manual refresh is available above.")
+
 
 # 1. Executive overview
 st.header("Executive overview")
@@ -507,7 +495,9 @@ decisive = wins + losses
 decisive_rate = wins / decisive * 100 if decisive else float("nan")
 avg_return = pd.to_numeric(valid["final_percent"], errors="coerce").mean() if closed_count else float("nan")
 latest_alert_time = alerts["_ts"].max() if not alerts.empty and "_ts" in alerts else pd.NaT
-latest_alert_label = latest_alert_time.tz_convert("Asia/Karachi").strftime("%d %b · %I:%M %p PKT") if pd.notna(latest_alert_time) else "No alert records"
+latest_alert_label = (latest_alert_time.tz_convert("Asia/Karachi").strftime("%d %b · %I:%M %p PKT")
+                      if pd.notna(latest_alert_time) else
+                      ("Timestamp unavailable" if not alerts.empty else "No alert records"))
 metric_row([
     ("Closed tracked alerts", f"{closed_count:,}"),
     ("Wins / losses / neutral", f"{wins:,} / {losses:,} / {neutral:,}"),
@@ -516,7 +506,47 @@ metric_row([
 ])
 st.caption(f'Latest alert record: {latest_alert_label} · {len(combined):,} unique events across {archive_status["loaded"]:,} archived files · {duplicate_count:,} duplicate rows removed')
 
-# 2. Detector performance
+# 2. Scanner intelligence — report only fields and event types actually present in the logs.
+st.header("Scanner intelligence")
+unique_symbols = combined["symbol"].nunique() if "symbol" in combined.columns else 0
+alert_records = len(alerts)
+outcome_records = len(outcomes)
+scanner_events = len(generic)
+metric_row([
+    ("Symbols observed", f"{unique_symbols:,}" if unique_symbols else "Not logged"),
+    ("Scanner / diagnostic events", f"{scanner_events:,}"),
+    ("Alert records", f"{alert_records:,}"),
+    ("Outcome evaluations", f"{outcome_records:,}"),
+])
+event_mix = generic.get("event_type", pd.Series(dtype="object")).fillna("unknown").astype(str).value_counts()
+left, right = st.columns(2)
+with left:
+    st.subheader("Logged scanner event types")
+    if not event_mix.empty:
+        event_mix_df = event_mix.rename_axis("Event type").reset_index(name="Records")
+        st.dataframe(event_mix_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No separate scanner/diagnostic event types were found in today's logs.")
+with right:
+    st.subheader("Diagnostic stages and rejection reasons")
+    diagnostic_parts = []
+    if "diagnostic.stage" in generic.columns:
+        stages = generic["diagnostic.stage"].dropna().astype(str).value_counts()
+        if not stages.empty:
+            diagnostic_parts.append(stages.rename_axis("Stage").reset_index(name="Records"))
+    if "diagnostic.reason" in generic.columns:
+        reasons = generic["diagnostic.reason"].dropna().astype(str).value_counts().head(12)
+        if not reasons.empty:
+            diagnostic_parts.append(reasons.rename_axis("Reason").reset_index(name="Records"))
+    if diagnostic_parts:
+        for part in diagnostic_parts:
+            st.dataframe(part, use_container_width=True, hide_index=True)
+    else:
+        st.info("Stage/rejection breakdown is not available in the current log fields. No funnel counts are inferred.")
+
+st.caption("Scanner funnel stages are shown only when explicitly recorded. Symbols observed are not assumed to equal symbols scanned.")
+
+# 3. Detector performance
 st.header("Detector performance")
 perf_all = detector_summary(valid)
 if not perf_all.empty:
@@ -540,7 +570,7 @@ if not perf_all.empty:
 else:
     st.info("No closed tracked-alert returns are available yet. Scanner skips and diagnostics are excluded from detector performance.")
 
-# 3. Coin intelligence
+# 4. Coin intelligence
 st.header("Coin intelligence")
 coin_source = valid.copy() if not valid.empty and "symbol" in valid else pd.DataFrame()
 if not coin_source.empty:
@@ -550,27 +580,27 @@ if not coin_source.empty:
         alerts=("final_percent", "size"),
         avg_return=("final_percent", "mean"),
         median_return=("final_percent", "median"),
-        wins=("final_percent", lambda x: int((x >= 1.0).sum()))
+        wins=("final_percent", lambda x: int((x >= 1.0).sum())),
+        losses=("final_percent", lambda x: int((x <= -0.5).sum())),
+        neutral=("final_percent", lambda x: int(((x > -0.5) & (x < 1.0)).sum())),
     ).reset_index()
-    coin_rank = coin_rank[coin_rank["alerts"] >= 2]
-    if not coin_rank.empty:
-        coin_rank["win_rate"] = coin_rank["wins"] / coin_rank["alerts"] * 100
-        left, right = st.columns(2)
-        with left:
-            st.subheader("Strongest coins")
-            st.dataframe(coin_rank.sort_values("avg_return", ascending=False).head(8).round(2),
-                         use_container_width=True, hide_index=True)
-        with right:
-            st.subheader("Weakest coins")
-            st.dataframe(coin_rank.sort_values("avg_return", ascending=True).head(8).round(2),
-                         use_container_width=True, hide_index=True)
-        st.caption("Closed tracked alerts only · minimum two observations per coin.")
-    else:
-        st.info("Not enough closed-alert observations per coin to rank reliably.")
+    decisive_by_coin = coin_rank["wins"] + coin_rank["losses"]
+    coin_rank["win_rate"] = (coin_rank["wins"] / decisive_by_coin.replace(0, pd.NA) * 100)
+    coin_rank = coin_rank.sort_values(["avg_return", "alerts"], ascending=[False, False])
+    display = coin_rank.rename(columns={
+        "symbol": "Coin", "alerts": "Alerts", "wins": "Wins", "losses": "Losses",
+        "neutral": "Neutral", "win_rate": "Decisive win rate",
+        "avg_return": "Average return", "median_return": "Median return"
+    }).copy()
+    display["Decisive win rate"] = display["Decisive win rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
+    display["Average return"] = display["Average return"].map(lambda x: f"{x:+.2f}%")
+    display["Median return"] = display["Median return"].map(lambda x: f"{x:+.2f}%")
+    st.dataframe(display, use_container_width=True, hide_index=True)
+    st.caption("Closed tracked alerts only. Sample size is shown for every coin; small samples should not be treated as reliable rankings.")
 else:
     st.info("Coin rankings will appear when closed tracked-alert records include symbol and final return.")
 
-# 4. Signal quality — use the dedicated outcome stream, keeping it separate from alert_record.
+# 5. Signal quality — use the dedicated outcome stream, keeping it separate from alert_record.
 st.header("Signal quality")
 latest_eval = latest_outcomes(outcomes)
 if not latest_eval.empty:
@@ -587,14 +617,22 @@ if not latest_eval.empty:
     ])
     quality_cols = [c for c in ["original_score", "original_volume_5m", "original_rsi_15m", "pnl_percent", "mfe_percent", "mae_percent"] if c in latest_eval]
     if quality_cols:
-        st.dataframe(latest_eval[["symbol", "result"] + quality_cols].sort_values(
-            "pnl_percent", ascending=False) if "pnl_percent" in quality_cols and "symbol" in latest_eval else latest_eval[["result"] + quality_cols],
-            use_container_width=True, hide_index=True)
+        display_cols = [c for c in ["symbol", "result"] + quality_cols if c in latest_eval]
+        quality_view = latest_eval[display_cols].copy()
+        quality_view = quality_view.rename(columns={
+            "symbol": "Coin", "result": "Outcome", "original_score": "Original score",
+            "original_volume_5m": "5m volume ratio", "original_rsi_15m": "15m RSI",
+            "pnl_percent": "P&L", "mfe_percent": "Max favourable move", "mae_percent": "Max adverse move"
+        })
+        sort_col = "P&L" if "P&L" in quality_view.columns else None
+        if sort_col:
+            quality_view = quality_view.sort_values(sort_col, ascending=False, na_position="last")
+        st.dataframe(quality_view, use_container_width=True, hide_index=True)
     st.caption("Latest evaluation per alert ID. Outcome records are analyzed separately and are not merged with detector alert records.")
 else:
     st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
 
-# 5. Latest R2 log — explicit latest file metadata and useful activity, not raw telemetry.
+# 6. Latest R2 log — explicit latest file metadata and useful activity, not raw telemetry.
 st.header("Latest log file")
 if latest_name:
     st.markdown(f"**Newest file currently present in Cloudflare R2:** {latest_name}")
