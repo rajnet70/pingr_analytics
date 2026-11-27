@@ -823,37 +823,58 @@ if active_page == "Overview":
     st.caption("Values compare medians for numeric indicators and bullish share for MACD. Missing source fields are omitted; no values are inferred.")
 
     st.subheader("All winning alerts · 24h liquidity")
-    if not classified.empty and "result" in classified.columns:
-        winning_alerts = classified[classified["result"].astype(str).str.lower().eq("win")].copy()
-        if not winning_alerts.empty and liquidity_field and liquidity_field in winning_alerts.columns:
-            winner_columns = [c for c in ["timestamp", "symbol", "detector", "original_score", liquidity_field, "pnl_percent"] if c in winning_alerts.columns]
-            winner_view = winning_alerts[winner_columns].copy()
-            winner_view[liquidity_field] = pd.to_numeric(winner_view[liquidity_field], errors="coerce")
-            winner_view = winner_view.rename(columns={
-                "timestamp": "Time", "symbol": "Symbol", "detector": "Alert type",
-                "original_score": "Signal score", liquidity_field: "24h liquidity (quote volume)",
-                "pnl_percent": "P&L %",
-            })
-            if "24h liquidity (quote volume)" in winner_view:
-                winner_view["24h liquidity (quote volume)"] = winner_view["24h liquidity (quote volume)"].map(
-                    lambda x: compact_volume(x) if pd.notna(x) else "Not recorded"
+    # Use the same alert_record rows that power the Overview Winners KPI (final return >= +1%).
+    # Enrich each row from its matching latest alert_outcome by alert_id; never join on symbol alone.
+    winning_alerts = valid[pd.to_numeric(valid["final_percent"], errors="coerce") >= 1.0].copy() if not valid.empty else pd.DataFrame()
+    if not winning_alerts.empty:
+        winner_view = winning_alerts.copy()
+        outcome_liquidity_field = liquidity_field if liquidity_field and liquidity_field in overview_outcomes.columns else None
+        if outcome_liquidity_field and "alert_id" in winner_view.columns and "alert_id" in overview_outcomes.columns:
+            liquidity_lookup = overview_outcomes[["alert_id", outcome_liquidity_field]].dropna(subset=["alert_id"]).drop_duplicates("alert_id", keep="last")
+            winner_view = winner_view.merge(liquidity_lookup, on="alert_id", how="left", suffixes=("", "_outcome"), validate="many_to_one")
+            if outcome_liquidity_field + "_outcome" in winner_view.columns:
+                winner_view[outcome_liquidity_field] = pd.to_numeric(winner_view[outcome_liquidity_field], errors="coerce").combine_first(
+                    pd.to_numeric(winner_view[outcome_liquidity_field + "_outcome"], errors="coerce")
                 )
-            if "P&L %" in winner_view:
-                winner_view["P&L %"] = pd.to_numeric(winner_view["P&L %"], errors="coerce").map(
-                    lambda x: f"{x:+.2f}%" if pd.notna(x) else "—"
-                )
-            if "Signal score" in winner_view:
-                winner_view["Signal score"] = pd.to_numeric(winner_view["Signal score"], errors="coerce").map(
-                    lambda x: f"{x:.1f}" if pd.notna(x) else "—"
-                )
-            st.dataframe(winner_view, use_container_width=True, hide_index=True)
-            st.caption(f"All {len(winner_view)} winning alert outcomes are listed individually. Liquidity uses the recorded 24h quote-volume field; missing values remain marked as not recorded.")
-        elif not winning_alerts.empty:
-            st.warning("Winning alerts are available, but no explicit 24h liquidity/quote-volume field was recorded. The dashboard will not substitute 5m volume.")
-        else:
-            st.info("No winning alert outcomes are recorded in the current archive.")
+        elif outcome_liquidity_field and outcome_liquidity_field not in winner_view.columns:
+            winner_view[outcome_liquidity_field] = pd.NA
+
+        display_columns = []
+        for field, label in [
+            ("timestamp", "Time"), ("symbol", "Symbol"), ("detector", "Alert type"),
+            ("signal_score", "Signal score"), (outcome_liquidity_field, "24h liquidity (quote volume)"),
+            ("final_percent", "P&L %"),
+        ]:
+            if field and field in winner_view.columns and field not in display_columns:
+                display_columns.append(field)
+        winner_view = winner_view[display_columns].copy()
+        winner_view = winner_view.rename(columns={
+            "timestamp": "Time", "symbol": "Symbol", "detector": "Alert type",
+            "signal_score": "Signal score", "final_percent": "P&L %",
+            outcome_liquidity_field: "24h liquidity (quote volume)" if outcome_liquidity_field else "",
+        })
+        if "24h liquidity (quote volume)" in winner_view:
+            winner_view["24h liquidity (quote volume)"] = pd.to_numeric(
+                winner_view["24h liquidity (quote volume)"], errors="coerce"
+            ).map(lambda x: compact_volume(x) if pd.notna(x) else "Not recorded")
+        if "P&L %" in winner_view:
+            winner_view["P&L %"] = pd.to_numeric(winner_view["P&L %"], errors="coerce").map(
+                lambda x: f"{x:+.2f}%" if pd.notna(x) else "—"
+            )
+        if "Signal score" in winner_view:
+            winner_view["Signal score"] = pd.to_numeric(winner_view["Signal score"], errors="coerce").map(
+                lambda x: f"{x:.1f}" if pd.notna(x) else "—"
+            )
+        if "Time" in winner_view:
+            parsed_time = pd.to_datetime(winner_view["Time"], errors="coerce", utc=True)
+            winner_view["Time"] = parsed_time.dt.tz_convert("Asia/Karachi").dt.strftime("%d %b %H:%M PKT").fillna("—")
+        st.dataframe(winner_view, use_container_width=True, hide_index=True)
+        liquidity_count = int((winner_view["24h liquidity (quote volume)"] != "Not recorded").sum()) if "24h liquidity (quote volume)" in winner_view else 0
+        st.caption(f"{len(winner_view)} winning alert records — the same records counted in the Winners KPI. 24h liquidity is matched by alert_id; {liquidity_count} have a recorded value.")
+        if "24h liquidity (quote volume)" not in winner_view:
+            st.warning("No explicit 24h quote-volume field is present in the current outcome data. Liquidity is not inferred from short-term volume.")
     else:
-        st.info("Winning alert outcomes are not available in the current archive.")
+        st.info("No winning alert records are available in the current archive.")
 
     # Compact insight strip from actual sample observations.
     insight_items=[]
