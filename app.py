@@ -808,6 +808,77 @@ if active_page == "Overview":
         cells="".join(f'<div class="insight-cell"><small>{a}</small><b>{b}</b><span>{c}</span></div>' for a,b,c,_ in insight_items)
         st.markdown(f'<div class="insight-strip"><div class="insight-title">✦ KEY INSIGHTS</div>{cells}</div>',unsafe_allow_html=True)
 
+
+    # Expanded performance intelligence: every tile is derived from closed alert records.
+    performance_items = []
+    if not valid.empty and "final_percent" in valid.columns:
+        returns = pd.to_numeric(valid["final_percent"], errors="coerce").dropna()
+        if not returns.empty:
+            performance_items.append(("AVERAGE RETURN", f"{returns.mean():+.2f}%", f"{len(returns)} closed alerts"))
+            best_trade = valid.loc[pd.to_numeric(valid["final_percent"], errors="coerce").idxmax()]
+            worst_trade = valid.loc[pd.to_numeric(valid["final_percent"], errors="coerce").idxmin()]
+            performance_items.append(("BIGGEST WINNER", str(best_trade.get("symbol", "Unknown")), f'{float(best_trade["final_percent"]):+.2f}% return'))
+            performance_items.append(("BIGGEST LOSER", str(worst_trade.get("symbol", "Unknown")), f'{float(worst_trade["final_percent"]):+.2f}% return'))
+
+        if "peak_percent" in valid.columns:
+            peaks = pd.to_numeric(valid["peak_percent"], errors="coerce").dropna()
+            if not peaks.empty:
+                peak_idx = pd.to_numeric(valid["peak_percent"], errors="coerce").idxmax()
+                peak_row = valid.loc[peak_idx]
+                performance_items.append(("BEST PEAK MOVE", str(peak_row.get("symbol", "Unknown")), f'{float(peak_row["peak_percent"]):+.2f}% peak'))
+
+        if {"peak_percent", "final_percent"}.issubset(valid.columns):
+            peak_values = pd.to_numeric(valid["peak_percent"], errors="coerce")
+            final_values = pd.to_numeric(valid["final_percent"], errors="coerce")
+            giveback_count = int(((peak_values >= 1.0) & (final_values < 0)).sum())
+            performance_items.append(("PROFIT GIVEBACK", f"{giveback_count}", "Reached +1% peak, closed negative"))
+
+        if {"signal_score", "final_percent"}.issubset(valid.columns):
+            score_data = pd.DataFrame({
+                "score": pd.to_numeric(valid["signal_score"], errors="coerce"),
+                "return": pd.to_numeric(valid["final_percent"], errors="coerce")
+            }).dropna()
+            if len(score_data) >= 5 and score_data["score"].nunique() > 1 and score_data["return"].nunique() > 1:
+                score_corr = score_data["score"].corr(score_data["return"])
+                if pd.notna(score_corr):
+                    relation = "Positive" if score_corr >= 0.35 else ("Negative" if score_corr <= -0.35 else "No clear relationship")
+                    performance_items.append(("SCORE / RETURN LINK", relation, f"Correlation {score_corr:+.2f} · n={len(score_data)}"))
+
+    detector_perf = detector_summary(valid)
+    if not detector_perf.empty:
+        eligible_detectors = detector_perf[detector_perf["alerts"] >= 2]
+        if not eligible_detectors.empty:
+            top_detector = eligible_detectors.sort_values(["avg_return", "alerts"], ascending=[False, False]).iloc[0]
+            performance_items.append(("BEST DETECTOR", str(top_detector["detector"]), f'{top_detector["avg_return"]:+.2f}% avg · n={int(top_detector["alerts"])}'))
+
+    if not symbol_rank.empty:
+        consistent = symbol_rank[symbol_rank["signals"] >= 3].copy()
+        consistent = consistent[consistent["decisive"] > 0]
+        if not consistent.empty:
+            consistent = consistent.sort_values(["win_rate", "signals"], ascending=[False, False])
+            row = consistent.iloc[0]
+            performance_items.append(("MOST CONSISTENT COIN", str(row["symbol"]), f'{row["win_rate"]:.1f}% decisive win · n={int(row["signals"])}'))
+
+    if performance_items:
+        st.markdown('<div class="insight-strip"><div class="insight-title">✦ PERFORMANCE INTELLIGENCE</div></div>', unsafe_allow_html=True)
+        performance_cards = "".join(
+            f'<div class="performance-insight"><small>{label}</small><b>{value}</b><span>{detail}</span></div>'
+            for label, value, detail in performance_items
+        )
+        st.markdown(
+            """<style>
+            .performance-insight-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-top:-18px}
+            .performance-insight{display:flex;flex-direction:column;justify-content:center;min-width:0;min-height:104px;padding:13px 15px;border:1px solid rgba(22,177,238,.30);border-radius:12px;background:linear-gradient(145deg,rgba(8,34,56,.96),rgba(3,15,29,.98))}
+            .performance-insight small{font-size:.62rem;letter-spacing:.10em;color:#8daec5;font-weight:900}
+            .performance-insight b{font-size:1.12rem;color:#f2f8ff;margin:7px 0 4px;overflow-wrap:anywhere}
+            .performance-insight span{font-size:.72rem;color:#39e75f;overflow-wrap:anywhere}
+            @media(max-width:760px){.performance-insight-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.performance-insight{padding:11px;min-height:96px}.performance-insight b{font-size:1rem}}
+            </style><div class="performance-insight-grid">""" + performance_cards + "</div>",
+            unsafe_allow_html=True
+        )
+    else:
+        st.info("Performance intelligence will appear as closed alert records accumulate.")
+
     st.caption("Win = final return ≥ +1%; loss = ≤ −0.5%; neutral = between those thresholds. Decisive win rate excludes neutral outcomes. Figures use current loaded R2 archive records.")
 if active_page == "Patterns":
     st.header("Pattern intelligence")
