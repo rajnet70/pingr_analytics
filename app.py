@@ -120,9 +120,7 @@ R2_FILE_URL = f"{R2_WORKER_URL}/dashboard/file"
 
 @st.cache_data(ttl=60, show_spinner=False)
 def r2_archive_index():
-    # Current-day view only, using Pakistan local date.
-    today = datetime.now(ZoneInfo("Asia/Karachi")).date()
-    date_path = f"/{today:%Y/%m/%d}/"
+    # Load every available compressed archive object from R2, across all dates.
     objects = []
     cursor = None
     seen_cursors = set()
@@ -145,7 +143,7 @@ def r2_archive_index():
         seen_cursors.add(next_cursor)
         cursor = next_cursor
 
-    # Keep only today's compressed log objects. Older R2 archives remain untouched.
+    # Include every .gz log object returned by the paginated R2 index.
     archives = [
         {
             "key": item["key"],
@@ -155,7 +153,6 @@ def r2_archive_index():
         }
         for item in objects
         if item.get("key", "").lower().endswith(".gz")
-        and date_path in f'/{item.get("key", "").lstrip("/")}'
     ]
     archives.sort(key=lambda item: (item.get("uploaded") or "", item["key"]))
     return archives, last_run
@@ -207,7 +204,7 @@ with control_left:
 with control_right:
     st.markdown(
         f'<div style="padding:10px 14px;border:1px solid rgba(66,184,244,.18);border-radius:11px;background:rgba(8,24,40,.72);color:#a9c5da;font-size:.82rem">'
-        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; Today only: {today_label} PKT'
+        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; All available archive dates'
         f' &nbsp;·&nbsp; Auto-refresh every 2 hours &nbsp;·&nbsp; Bucket: pingr / pingr/logs/</div>',
         unsafe_allow_html=True
     )
@@ -616,7 +613,12 @@ if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcom
                 row["Median P&L %"] = group["pnl_percent"].median()
             for field, label in indicator_fields:
                 if field in group:
-                    row[label] = pd.to_numeric(group[field], errors="coerce").median()
+                    field_values = pd.to_numeric(group[field], errors="coerce").dropna()
+                    if label == "24h Quote Vol":
+                        row["24h Quote Vol Min"] = field_values.min() if not field_values.empty else float("nan")
+                        row["24h Quote Vol Max"] = field_values.max() if not field_values.empty else float("nan")
+                    else:
+                        row[label] = field_values.median() if not field_values.empty else float("nan")
             for field, label in macd_fields:
                 known = group[field].map(lambda value: isinstance(value, bool))
                 if known.any():
@@ -656,10 +658,11 @@ if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcom
                     row[prefix] = "No data"
                     row[prefix + " n"] = 0
                     continue
-                low, median, high = values.quantile([.25, .50, .75]).tolist()
                 if kind == "volume":
-                    row[prefix] = f"{compact_volume(low)}–{compact_volume(high)} (med {compact_volume(median)})"
-                elif kind == "percent":
+                    row[prefix] = f"Min {compact_volume(values.min())} · Max {compact_volume(values.max())}"
+                else:
+                    low, median, high = values.quantile([.25, .50, .75]).tolist()
+                if kind == "percent":
                     row[prefix] = f"{low:+.2f}%–{high:+.2f}% (med {median:+.2f}%)"
                 elif kind == "multiple":
                     row[prefix] = f"{low:.2f}×–{high:.2f}× (med {median:.2f}×)"
@@ -772,7 +775,6 @@ if active_page == "Overview":
         metric_lookup = {row["Group"]: row for _,row in summary_df.iterrows()} if not summary_df.empty else {}
         metric_specs = [
             ("15m RSI","number"),
-            ("24h Quote Vol","volume"),
             ("5m volume ratio","multiple"),
             ("5m price change %","percent"),
         ]
@@ -781,9 +783,7 @@ if active_page == "Overview":
             l = metric_lookup.get("Losers",{}).get(label,float("nan"))
             if pd.isna(w) and pd.isna(l):
                 continue
-            if kind == "volume":
-                wv,lv=compact_volume(w),compact_volume(l)
-            elif kind == "multiple":
+            if kind == "multiple":
                 wv,lv=(f"{w:.2f}×" if pd.notna(w) else "—"),(f"{l:.2f}×" if pd.notna(l) else "—")
             elif kind == "percent":
                 wv,lv=(f"{w:+.2f}%" if pd.notna(w) else "—"),(f"{l:+.2f}%" if pd.notna(l) else "—")
@@ -791,6 +791,16 @@ if active_page == "Overview":
                 wv,lv=(f"{w:.1f}" if pd.notna(w) else "—"),(f"{l:.1f}" if pd.notna(l) else "—")
             st.markdown(
                 f'<div class="mini-metric"><span>{label}</span><b class="positive">{wv} (W)</b><i>|</i><b class="negative">{lv} (L)</b></div>',
+                unsafe_allow_html=True,
+            )
+        for bound in ("Min", "Max"):
+            label = f"24h Quote Vol {bound}"
+            w = metric_lookup.get("Winners",{}).get(label,float("nan"))
+            l = metric_lookup.get("Losers",{}).get(label,float("nan"))
+            if pd.isna(w) and pd.isna(l):
+                continue
+            st.markdown(
+                f'<div class="mini-metric"><span>{label}</span><b class="positive">{compact_volume(w)} (W)</b><i>|</i><b class="negative">{compact_volume(l)} (L)</b></div>',
                 unsafe_allow_html=True,
             )
 
@@ -963,8 +973,11 @@ if active_page == "Patterns":
             for outcome_name in ("win", "loss"):
                 vals = pd.to_numeric(frame.loc[frame["result"].astype(str).str.lower().eq(outcome_name), field], errors="coerce").dropna()
                 if not vals.empty:
-                    q1, med, q3 = vals.quantile([.25, .50, .75]).tolist()
-                    groups[outcome_name] = {"q1": q1, "median": med, "q3": q3, "n": len(vals)}
+                    if kind == "volume":
+                        groups[outcome_name] = {"minimum": vals.min(), "maximum": vals.max(), "n": len(vals)}
+                    else:
+                        q1, med, q3 = vals.quantile([.25, .50, .75]).tolist()
+                        groups[outcome_name] = {"q1": q1, "median": med, "q3": q3, "n": len(vals)}
                     all_values.extend(vals.tolist())
                 else:
                     groups[outcome_name] = None
@@ -977,17 +990,24 @@ if active_page == "Patterns":
                 if stats is None:
                     sides.append(f'<div class="pattern-side {tone}"><b>{heading}</b><div class="pattern-no-data">No recorded values</div></div>')
                 else:
+                    if kind == "volume":
+                        main_value = f'Min {display_value(stats["minimum"], kind)} · Max {display_value(stats["maximum"], kind)}'
+                        range_value = ""
+                    else:
+                        main_value = display_value(stats["median"], kind)
+                        range_value = f'<div class="pattern-range">{display_value(stats["q1"], kind)} – {display_value(stats["q3"], kind)} <span>· IQR</span></div>'
                     sides.append(
                         f'<div class="pattern-side {tone}"><div class="pattern-side-top"><span class="pattern-side-label">{heading}</span>'
-                        f'<span class="pattern-n">n={stats["n"]}</span></div><div class="pattern-median">{display_value(stats["median"], kind)}</div>'
-                        f'<div class="pattern-range">{display_value(stats["q1"], kind)} – {display_value(stats["q3"], kind)} <span>· IQR</span></div></div>'
+                        f'<span class="pattern-n">n={stats["n"]}</span></div><div class="pattern-median">{main_value}</div>'
+                        f'{range_value}</div>'
                     )
+            card_tag = "MIN · MAX" if kind == "volume" else "MEDIAN · IQR"
             cards.append(
                 '<div class="pattern-card"><div class="pattern-card-head"><span>' + label +
-                '</span><span class="pattern-card-tag">MEDIAN · IQR</span></div><div class="pattern-compare">' +
+                f'</span><span class="pattern-card-tag">{card_tag}</span></div><div class="pattern-compare">' +
                 ''.join(sides) + '</div></div>'
             )
-            if groups["win"] and groups["loss"]:
+            if groups["win"] and groups["loss"] and kind != "volume":
                 findings.append((label, kind, groups["win"], groups["loss"]))
 
         st.subheader("Winning vs losing conditions")
