@@ -24,7 +24,11 @@ st.markdown("""
 .stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.10;background:repeating-radial-gradient(circle at 0% 82%,transparent 0 26px,rgba(22,201,245,.55) 27px 28px,transparent 29px 43px);mask-image:linear-gradient(90deg,black,transparent 24%)}
 .block-container{max-width:1800px;padding:1.25rem 1.5rem 2.5rem;position:relative}
 [data-testid="stHeader"]{background:rgba(2,8,19,.82);backdrop-filter:blur(14px)}
-[data-testid="stSidebar"]{display:block!important;background:linear-gradient(180deg,#041322,#020b17)!important;border-right:1px solid rgba(22,177,238,.25);min-width:210px!important}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#041322,#020b17)!important;border-right:1px solid rgba(22,177,238,.25)}
+[data-testid="stSidebar"]>div{min-width:0}
+[data-testid="stSidebarCollapseButton"],[data-testid="stSidebar"] button[kind="header"]{display:flex!important;visibility:visible!important;opacity:1!important;pointer-events:auto!important;z-index:1001!important}
+@media(min-width:768px) and (max-width:1366px){[data-testid="stSidebar"]{width: min(260px, 28vw)!important}}
+@media(max-width:767px){[data-testid="stSidebar"]{width:min(82vw, 320px)!important}}
 [data-testid="stSidebar"]>div{padding-top:1rem}
 [data-testid="stSidebar"] [data-testid="stRadio"] label{padding:11px 13px;border-radius:11px;color:#d9eaf7;font-weight:700;margin:3px 0}
 [data-testid="stSidebar"] [data-testid="stRadio"] label:hover{background:rgba(0,177,238,.13)}
