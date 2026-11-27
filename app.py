@@ -539,6 +539,114 @@ with tab_overview:
     ])
     st.caption(f'Latest alert record: {latest_alert_label} · {len(combined):,} unique events across {archive_status["loaded"]:,} archived files · {duplicate_count:,} duplicate rows removed')
 
+    # Winner vs loser intelligence from the dedicated outcome stream.
+    st.subheader("Winners vs losers · what was different?")
+    overview_outcomes = latest_outcomes(outcomes)
+    if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcomes.columns):
+        overview_outcomes = overview_outcomes.copy()
+        overview_outcomes["result"] = overview_outcomes["result"].astype(str).str.lower()
+        for field in [
+            "pnl_percent", "original_volume_5m", "original_price_change_5m",
+            "original_rsi_15m", "original_score", "original_liquidity",
+            "original_liquidity_usd", "original_quote_volume_24h",
+            "original_volume_24h", "original_turnover_24h"
+        ]:
+            if field in overview_outcomes:
+                overview_outcomes[field] = pd.to_numeric(overview_outcomes[field], errors="coerce")
+
+        # Detect explicitly named liquidity/24h quote-volume fields; never relabel
+        # a short-term volume ratio as liquidity.
+        liquidity_fields = [
+            col for col in overview_outcomes.columns
+            if any(token in col.lower() for token in ("liquidity", "quote_volume", "turnover_24h", "volume_24h"))
+            and pd.api.types.is_numeric_dtype(overview_outcomes[col])
+        ]
+        liquidity_field = next(
+            (col for col in liquidity_fields if "original" in col.lower()),
+            liquidity_fields[0] if liquidity_fields else None
+        )
+        indicator_fields = [
+            ("original_score", "Signal score"),
+            ("original_volume_5m", "5m volume ratio"),
+            ("original_price_change_5m", "5m price change %"),
+            ("original_rsi_15m", "15m RSI"),
+        ]
+        if liquidity_field:
+            indicator_fields.append((liquidity_field, "Liquidity / 24h volume"))
+        macd_fields = [
+            (field, label) for field, label in [
+                ("original_macd_5m", "MACD 5m"),
+                ("original_macd_15m", "MACD 15m"),
+                ("original_macd_1h", "MACD 1h")
+            ] if field in overview_outcomes.columns
+        ]
+
+        classified = overview_outcomes[
+            overview_outcomes["result"].isin(["win", "loss", "neutral"])
+        ].copy()
+        if not classified.empty:
+            classified["symbol"] = classified["symbol"].fillna("Unknown").astype(str)
+            if "pnl_percent" in classified:
+                classified = classified.sort_values("pnl_percent", ascending=False, na_position="last")
+            summary_rows = []
+            for result_name, display_name in [("win", "Winners"), ("loss", "Losers"), ("neutral", "Neutral")]:
+                group = classified[classified["result"].eq(result_name)]
+                row = {"Group": display_name, "Alerts": len(group)}
+                if "pnl_percent" in group:
+                    row["Median P&L %"] = pd.to_numeric(group["pnl_percent"], errors="coerce").median()
+                for field, label in indicator_fields:
+                    if field in group:
+                        row[label] = pd.to_numeric(group[field], errors="coerce").median()
+                for field, label in macd_fields:
+                    known = group[field].map(lambda value: isinstance(value, bool))
+                    if known.any():
+                        row[label + " bullish %"] = group.loc[known, field].astype(bool).mean() * 100
+                summary_rows.append(row)
+            summary_df = pd.DataFrame(summary_rows)
+            numeric_formats = {
+                col: "{:+.2f}" if col == "Median P&L %" or col.endswith("price change %")
+                else "{:.2f}" if col in ["Signal score", "5m volume ratio", "15m RSI", "Liquidity / 24h volume"]
+                else "{:.1f}%" if col.endswith("bullish %")
+                else "{:.2f}"
+                for col in summary_df.columns if col != "Group" and col != "Alerts"
+            }
+            st.dataframe(summary_df.style.format(numeric_formats, na_rep="—"), use_container_width=True, hide_index=True)
+            st.caption("Median indicator readings at alert time, grouped by the latest recorded outcome per alert ID. MACD figures show the share marked bullish. This is descriptive, not proof that an indicator caused the result.")
+
+            symbol_cols = [col for col in [
+                "symbol", "result", "pnl_percent", "original_score",
+                "original_volume_5m", "original_rsi_15m", "original_price_change_5m"
+            ] if col in classified]
+            if liquidity_field and liquidity_field not in symbol_cols:
+                symbol_cols.append(liquidity_field)
+            if macd_fields:
+                symbol_cols.extend(field for field, _ in macd_fields if field not in symbol_cols)
+            symbol_view = classified[symbol_cols].copy()
+            symbol_view = symbol_view.rename(columns={
+                "symbol": "Symbol", "result": "Outcome", "pnl_percent": "P&L %",
+                "original_score": "Signal score", "original_volume_5m": "5m volume",
+                "original_rsi_15m": "15m RSI", "original_price_change_5m": "5m price change %",
+            })
+            if liquidity_field:
+                symbol_view = symbol_view.rename(columns={liquidity_field: "Liquidity / 24h volume"})
+            for field, label in macd_fields:
+                symbol_view = symbol_view.rename(columns={field: label})
+            winner_loser_tabs = st.tabs(["Winning symbols", "Losing symbols"])
+            for pane, result_name in zip(winner_loser_tabs, ["win", "loss"]):
+                with pane:
+                    subset = symbol_view[classified["result"].eq(result_name)].head(15)
+                    if subset.empty:
+                        st.info(f"No {result_name} outcomes in the current archive.")
+                    else:
+                        st.dataframe(subset, use_container_width=True, hide_index=True)
+        else:
+            st.info("No final win/loss/neutral outcomes are available yet.")
+        if not liquidity_field:
+            st.caption("Liquidity is not present as an explicit field in the current outcome records, so it is not estimated from volume ratios.")
+    else:
+        st.info("The current archive does not contain usable alert_outcome records with symbols and results. The comparison will populate when those records are available.")
+
+
     st.subheader("Outcome mix")
     if closed_count:
         outcome_mix = pd.DataFrame({"Outcome": ["Wins", "Losses", "Neutral"], "Alerts": [wins, losses, neutral]})
