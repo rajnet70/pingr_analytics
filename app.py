@@ -57,7 +57,7 @@ st.markdown("""
 .panel-title{font-size:1.05rem;font-weight:900;color:#f1f8ff;padding:12px 14px 8px;border:1px solid rgba(22,177,238,.42);border-bottom:0;border-radius:15px 15px 0 0;background:linear-gradient(100deg,rgba(8,35,57,.98),rgba(4,18,32,.96))}
 .panel-sub{font-size:.8rem;color:#8eb1c9;font-weight:500}
 [data-testid="stPlotlyChart"],[data-testid="stDataFrame"]{border:1px solid rgba(22,177,238,.42);border-radius:0 0 15px 15px;overflow:hidden;background:rgba(5,21,37,.86);padding:4px}
-[data-testid="stDataFrame]{border-radius:12px}
+[data-testid="stDataFrame"]{border-radius:12px}
 [data-testid="stMetric"]{background:linear-gradient(145deg,rgba(8,34,56,.96),rgba(3,15,29,.98));border:1px solid rgba(22,177,238,.32);border-radius:14px;padding:13px 15px;min-height:86px}
 [data-testid="stMetricLabel"]{color:#9ebbd2;font-size:.68rem;letter-spacing:.06em;text-transform:uppercase;font-weight:800}
 [data-testid="stMetricValue"]{color:#f3f9ff;font-weight:900;font-size:1.55rem}
@@ -666,8 +666,11 @@ if active_page == "Overview":
             wins=("final_percent", lambda x: int((x >= 1.0).sum())),
             losses=("final_percent", lambda x: int((x <= -.5).sum())),
             median_pnl=("final_percent", "median"),
-            avg_score=("signal_score", "mean") if "signal_score" in symbol_data else ("final_percent", "size"),
         ).reset_index()
+        symbol_rank["avg_score"] = (
+            symbol_data.groupby("symbol")["signal_score"].mean().reindex(symbol_rank["symbol"]).to_numpy()
+            if "signal_score" in symbol_data else float("nan")
+        )
         symbol_rank["decisive"] = symbol_rank["wins"] + symbol_rank["losses"]
         symbol_rank["win_rate"] = (symbol_rank["wins"] / symbol_rank["decisive"].replace(0, pd.NA) * 100)
         symbol_rank = symbol_rank.sort_values(["win_rate", "signals"], ascending=[False, False], na_position="last")
@@ -747,7 +750,7 @@ if active_page == "Overview":
 
     # Compact insight strip from actual sample observations.
     insight_items=[]
-    if not symbol_rank.empty if closed_count and "symbol" in valid.columns else False:
+    if closed_count and "symbol" in valid.columns and not symbol_rank.empty:
         best=symbol_rank.iloc[0]
         if pd.notna(best["win_rate"]):
             insight_items.append(("TOP PERFORMER",str(best["symbol"]),f'{best["win_rate"]:.1f}% win rate',"green"))
