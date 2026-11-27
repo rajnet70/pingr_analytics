@@ -80,6 +80,24 @@ h3{font-size:1rem!important;font-weight:800!important}
 hr{border-color:rgba(22,177,238,.16)!important}
 @media(max-width:1100px){.kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.insight-strip{flex-wrap:wrap}.insight-cell{min-width:30%}}
 @media(max-width:750px){[data-testid="stSidebar"]{min-width:175px!important}.block-container{padding:.8rem .75rem 2rem}.kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.kpi-value{font-size:1.45rem}.page-heading{font-size:1.55rem}.topline-right{gap:7px;font-size:.66rem}.insight-title{min-width:100%;padding:10px 14px}.insight-cell{min-width:45%;padding:10px}.mini-metric{flex-wrap:wrap}}
+/* Overview spacing and tablet-friendly table/chart hierarchy */
+.top-status{margin:2px 0 13px}
+.kpi-grid{grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:10px 0 22px}
+.kpi-card{min-height:88px;padding:12px 13px}
+[data-testid="stDataFrame"]{width:100%;border-radius:0 0 14px 14px;margin-bottom:4px}
+[data-testid="stDataFrame"] [data-testid="glideDataEditor"]{width:100%}
+.mini-metric{min-height:48px;gap:7px;padding:11px 12px}
+.mini-metric span{min-width:100px}
+.panel-title{min-height:48px;display:flex;align-items:center;gap:8px}
+@media(max-width:1050px){
+ .kpi-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+ .mini-metric{flex-wrap:wrap}
+ .mini-metric span{min-width:100%;flex-basis:100%}
+}
+@media(max-width:750px){
+ .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .block-container{padding:.75rem .7rem 2rem}
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -197,18 +215,9 @@ except Exception as exc:
     st.info("Check that the deployed archive Worker exposes /dashboard/index and /dashboard/file.")
     st.stop()
 uploads = [ArchiveUpload(name, content) for name, content in archive_files]
-status_cols = st.columns(3)
-status_cols[0].metric("R2 objects loaded", f'{archive_status["loaded"]:,}')
-status_cols[1].metric("Latest R2 object", archive_status["updated"])
-status_cols[2].metric("Read errors", f'{len(archive_status["errors"]):,}')
-if archive_status["last_sync"]:
-    st.caption(f'Last GitHub mirror sync: {archive_status["last_sync"].get("completedAt", "status available")}')
 if archive_status["errors"]:
     with st.expander(f'{len(archive_status["errors"])} R2 object(s) could not be read'):
         st.write(archive_status["errors"])
-else:
-    st.success("R2 archive read completed without file errors.")
-st.caption("Individual archive files are cached by key, size and upload time.")
 
 
 def parse_files(files):
@@ -546,6 +555,8 @@ win_rate = wins / closed_count * 100 if closed_count else float("nan")
 decisive_rate = wins / decisive * 100 if decisive else float("nan")
 avg_return = pd.to_numeric(valid["final_percent"], errors="coerce").mean() if closed_count else float("nan")
 latest_alert_time = alerts["_ts"].max() if not alerts.empty and "_ts" in alerts else pd.NaT
+if pd.isna(latest_alert_time):
+    latest_alert_time = latest_time
 latest_alert_label = (latest_alert_time.tz_convert("Asia/Karachi").strftime("%d %b %Y, %H:%M PKT")
                       if pd.notna(latest_alert_time) else "Timestamp unavailable")
 
@@ -709,45 +720,75 @@ if active_page == "Overview":
     )
     st.markdown(f'<div class="kpi-grid">{kpi_html}</div>', unsafe_allow_html=True)
 
-    left, right = st.columns([.95, 2.05], gap="medium")
-    with left:
+    # Full-width symbol leaderboard keeps names and metrics readable on tablet/desktop.
+    st.markdown('<div class="panel-title">Signal Performance <span class="panel-sub">(ranked by decisive win rate)</span></div>', unsafe_allow_html=True)
+    if not symbol_rank_view.empty:
+        st.dataframe(
+            symbol_rank_view,
+            use_container_width=True,
+            hide_index=True,
+            column_config={
+                "Win Rate": st.column_config.TextColumn("Win Rate"),
+                "Median P&L": st.column_config.TextColumn("Median P&L"),
+            },
+        )
+    else:
+        st.info("Symbol performance appears when closed tracked-alert records include symbols.")
+    st.caption("Ranked from closed tracked-alert records. Win rate excludes neutral outcomes.")
+
+    # Balanced second row: chart and indicator comparison share the available width.
+    outcome_col, metrics_col = st.columns([1, 1], gap="large")
+    with outcome_col:
         st.markdown('<div class="panel-title">Outcome Mix</div>', unsafe_allow_html=True)
         if closed_count:
             mix = pd.DataFrame({"Outcome":["Winners","Losers","Neutral"],"Signals":[wins,losses,neutral]})
-            fig = px.pie(mix, names="Outcome", values="Signals", hole=.68,
-                         color="Outcome", color_discrete_map={"Winners":"#39e75f","Losers":"#ff5b63","Neutral":"#b8c7d9"})
-            fig.update_traces(textinfo="none", marker=dict(line=dict(color="#07111e",width=3)),
-                              hovertemplate="%{label}: %{value} (%{percent})<extra></extra>")
-            fig.update_layout(template="plotly_dark",height=250,showlegend=True,
-                              margin=dict(l=0,r=0,t=0,b=0),paper_bgcolor="rgba(0,0,0,0)",
-                              plot_bgcolor="rgba(0,0,0,0)",font=dict(color="#eaf5ff",size=12),
-                              legend=dict(orientation="v",y=.5,x=1.0,xanchor="left"))
+            fig = px.pie(
+                mix, names="Outcome", values="Signals", hole=.70,
+                color="Outcome",
+                color_discrete_map={"Winners":"#39e75f","Losers":"#ff5b63","Neutral":"#b8c7d9"},
+            )
+            fig.update_traces(
+                textinfo="none",
+                marker=dict(line=dict(color="#07111e",width=3)),
+                hovertemplate="%{label}: %{value} (%{percent})<extra></extra>",
+            )
+            fig.update_layout(
+                template="plotly_dark", height=285, showlegend=True,
+                margin=dict(l=8,r=8,t=8,b=8),
+                paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+                font=dict(color="#eaf5ff",size=12),
+                legend=dict(orientation="h",y=-.06,x=.5,xanchor="center",yanchor="top"),
+            )
             st.plotly_chart(fig,use_container_width=True,config={"displayModeBar":False})
         else:
             st.info("Outcome mix appears when tracked alerts close.")
-        st.markdown('<div class="panel-title">Key Metrics (Averages)</div>', unsafe_allow_html=True)
+
+    with metrics_col:
+        st.markdown('<div class="panel-title">Winner vs Loser · Key Metrics</div>', unsafe_allow_html=True)
         metric_lookup = {row["Group"]: row for _,row in summary_df.iterrows()} if not summary_df.empty else {}
-        for label in ["15m RSI","24h Quote Vol","5m volume ratio"]:
+        metric_specs = [
+            ("15m RSI","number"),
+            ("24h Quote Vol","volume"),
+            ("5m volume ratio","multiple"),
+            ("5m price change %","percent"),
+        ]
+        for label, kind in metric_specs:
             w = metric_lookup.get("Winners",{}).get(label,float("nan"))
             l = metric_lookup.get("Losers",{}).get(label,float("nan"))
-            if pd.notna(w) or pd.notna(l):
-                if label == "24h Quote Vol":
-                    wv,lv=compact_volume(w),compact_volume(l)
-                elif label == "5m volume ratio":
-                    wv,lv=(f"{w:.2f}×" if pd.notna(w) else "—"),(f"{l:.2f}×" if pd.notna(l) else "—")
-                else:
-                    wv,lv=(f"{w:.1f}" if pd.notna(w) else "—"),(f"{l:.1f}" if pd.notna(l) else "—")
-                st.markdown(f'<div class="mini-metric"><span>{label}</span><b class="positive">{wv} (W)</b><i>|</i><b class="negative">{lv} (L)</b></div>',unsafe_allow_html=True)
-
-    with right:
-        st.markdown('<div class="panel-title">Signal Performance <span class="panel-sub">(by Win Rate)</span></div>', unsafe_allow_html=True)
-        if not symbol_rank_view.empty:
-            st.dataframe(symbol_rank_view,use_container_width=True,hide_index=True,
-                         column_config={"Win Rate":st.column_config.TextColumn("Win Rate"),
-                                        "Median P&L":st.column_config.TextColumn("Median P&L")})
-        else:
-            st.info("Symbol performance appears when closed tracked-alert records include symbols.")
-        st.caption("Ranked from closed tracked-alert records. Win rate excludes neutral outcomes.")
+            if pd.isna(w) and pd.isna(l):
+                continue
+            if kind == "volume":
+                wv,lv=compact_volume(w),compact_volume(l)
+            elif kind == "multiple":
+                wv,lv=(f"{w:.2f}×" if pd.notna(w) else "—"),(f"{l:.2f}×" if pd.notna(l) else "—")
+            elif kind == "percent":
+                wv,lv=(f"{w:+.2f}%" if pd.notna(w) else "—"),(f"{l:+.2f}%" if pd.notna(l) else "—")
+            else:
+                wv,lv=(f"{w:.1f}" if pd.notna(w) else "—"),(f"{l:.1f}" if pd.notna(l) else "—")
+            st.markdown(
+                f'<div class="mini-metric"><span>{label}</span><b class="positive">{wv} (W)</b><i>|</i><b class="negative">{lv} (L)</b></div>',
+                unsafe_allow_html=True,
+            )
 
     # Compact insight strip from actual sample observations.
     insight_items=[]
