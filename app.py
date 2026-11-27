@@ -833,8 +833,19 @@ if active_page == "Overview":
         winning_alerts = valid[pd.to_numeric(valid["final_percent"], errors="coerce") >= 1.0].copy() if not valid.empty else pd.DataFrame()
         if not winning_alerts.empty:
             winner_view = winning_alerts.copy()
-            outcome_liquidity_field = liquidity_field if liquidity_field and liquidity_field in overview_outcomes.columns else None
-            if outcome_liquidity_field and "alert_id" in winner_view.columns and "alert_id" in overview_outcomes.columns:
+            liquidity_candidates = [
+                "original_liquidity", "original_liquidity_usd", "original_quote_volume_24h",
+                "original_volume_24h", "original_turnover_24h", "quote_volume_24h",
+                "volume_24h", "turnover_24h"
+            ]
+            # Prefer a 24h quote-volume field already attached to the winning alert record.
+            # Otherwise enrich from its matching outcome record by alert_id.
+            direct_liquidity_field = next((field for field in liquidity_candidates if field in winner_view.columns), None)
+            outcome_liquidity_field = (
+                direct_liquidity_field if direct_liquidity_field else
+                (liquidity_field if liquidity_field and liquidity_field in overview_outcomes.columns else None)
+            )
+            if not direct_liquidity_field and outcome_liquidity_field and "alert_id" in winner_view.columns and "alert_id" in overview_outcomes.columns:
                 liquidity_lookup = overview_outcomes[["alert_id", outcome_liquidity_field]].dropna(subset=["alert_id"]).drop_duplicates("alert_id", keep="last")
                 winner_view = winner_view.merge(liquidity_lookup, on="alert_id", how="left", suffixes=("", "_outcome"), validate="many_to_one")
                 if outcome_liquidity_field + "_outcome" in winner_view.columns:
