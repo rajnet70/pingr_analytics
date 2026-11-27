@@ -973,24 +973,6 @@ if active_page == "Overview":
                         values = values.combine_first(pd.to_numeric(frame[field], errors="coerce"))
                 return values
 
-            def first_source(frame, fields):
-                values = pd.Series(index=frame.index, dtype="object")
-                for field in fields:
-                    if field in frame.columns:
-                        values = values.where(values.notna(), frame[field])
-                return values
-
-            def format_bool(value):
-                if isinstance(value, bool):
-                    return "Bullish" if value else "Not bullish"
-                if pd.isna(value):
-                    return "—"
-                if str(value).strip().lower() in ("true", "1", "yes"):
-                    return "Bullish"
-                if str(value).strip().lower() in ("false", "0", "no"):
-                    return "Not bullish"
-                return "—"
-
             winner_view = pd.DataFrame(index=enriched.index)
             parsed_time = pd.to_datetime(enriched.get("alert_time", pd.Series(index=enriched.index)), errors="coerce", utc=True)
             winner_view["Alert time (PKT)"] = parsed_time.dt.tz_convert("Asia/Karachi").dt.strftime("%d %b · %H:%M:%S").fillna("—")
