@@ -19,34 +19,42 @@ st_autorefresh(interval=120000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
-:root{--bg:#070c16;--panel:#0d1929;--line:rgba(130,160,190,.18);--muted:#91a4bb;--text:#edf5ff;--cyan:#22d3ee;--green:#20d6a0;--red:#fb7185}
-.stApp{background:radial-gradient(ellipse at 12% 0%,rgba(20,120,160,.13),transparent 32%),radial-gradient(ellipse at 92% 8%,rgba(52,75,150,.12),transparent 28%),var(--bg);color:var(--text)}
-.block-container{max-width:1600px;padding:1rem 1.2rem 2rem}
-[data-testid="stHeader"]{background:rgba(7,12,22,.88)}
-[data-testid="stSidebar"]{background:#091321;border-right:1px solid var(--line)}
-h1,h2,h3{letter-spacing:-.035em}
-.pingr-title{font-size:clamp(1.65rem,3vw,2.35rem);font-weight:800;letter-spacing:-.055em;margin:.1rem 0 .15rem;color:var(--text)}
-.pingr-title span{color:var(--cyan)}
-.pingr-eyebrow{color:var(--cyan);text-transform:uppercase;letter-spacing:.16em;font-size:.68rem;font-weight:800;margin-top:.3rem}
-.pingr-subtitle{color:var(--muted);font-size:.88rem;margin:.15rem 0 .6rem}
-.pingr-rule{height:1px;background:linear-gradient(90deg,rgba(34,211,238,.55),rgba(148,163,184,.03));margin:.55rem 0 .9rem}
-h2{font-size:1.15rem!important;margin:.45rem 0 .55rem!important}
-h3{font-size:.98rem!important}
-[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(18,36,58,.98),rgba(10,23,39,.98));border:1px solid var(--line);border-radius:13px;padding:11px 13px;box-shadow:0 8px 24px rgba(0,0,0,.12);min-height:88px}
-[data-testid="stMetricLabel"]{color:var(--muted);font-size:.76rem;letter-spacing:.025em}
-[data-testid="stMetricValue"]{color:var(--text);font-weight:800;font-size:1.55rem;letter-spacing:-.04em}
-div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:12px;background:rgba(13,25,41,.68)}
-.stButton button,.stDownloadButton button{border-radius:9px;border:1px solid var(--line);min-height:40px}
-[data-testid="stDataFrame"]{border:1px solid var(--line);border-radius:10px;overflow:hidden}
-[data-testid="stPlotlyChart"]{border:1px solid rgba(130,160,190,.12);border-radius:12px;background:rgba(10,22,37,.4);padding:3px}
-@media(max-width:900px){.block-container{padding:.75rem .75rem 1.5rem}.pingr-title{font-size:1.65rem}[data-testid="stMetric"]{padding:9px 10px;min-height:80px}[data-testid="stMetricValue"]{font-size:1.25rem}}
-@media(max-width:600px){.block-container{padding:.55rem .55rem 1.25rem}.pingr-title{font-size:1.45rem}[data-testid="stMetricLabel"]{font-size:.69rem}[data-testid="stMetricValue"]{font-size:1.1rem}}
+:root{--bg:#070b14;--panel:#101b2c;--line:rgba(133,170,210,.18);--muted:#9aabc1;--text:#f3f7ff;--cyan:#35d9f5;--lime:#b7f36b;--violet:#9b8cff;--green:#42e0a5;--red:#ff718d}
+.stApp{background:radial-gradient(ellipse at 8% -5%,rgba(22,191,220,.20),transparent 32%),radial-gradient(ellipse at 96% 0%,rgba(117,92,255,.18),transparent 30%),linear-gradient(180deg,#080e1a 0%,#070b14 55%,#090f1c 100%);color:var(--text)}
+.stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.16;background-image:linear-gradient(rgba(145,170,205,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(145,170,205,.07) 1px,transparent 1px);background-size:42px 42px;mask-image:linear-gradient(to bottom,black,transparent 78%)}
+.block-container{max-width:1680px;padding:1.25rem 1.6rem 3rem;position:relative}
+[data-testid="stHeader"]{background:rgba(7,11,20,.72);backdrop-filter:blur(14px)}
+[data-testid="stSidebar"]{background:linear-gradient(180deg,#0b1627,#080f1b);border-right:1px solid var(--line)}
+[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{color:var(--text)}
+h1,h2,h3{letter-spacing:-.04em;color:var(--text)}
+.pingr-title{font-size:clamp(2rem,4vw,3.25rem);font-weight:900;letter-spacing:-.075em;margin:.1rem 0 .2rem;color:#f7fbff;text-shadow:0 5px 30px rgba(40,210,245,.12)}
+.pingr-title span{background:linear-gradient(100deg,var(--cyan),#91a5ff 60%,var(--lime));-webkit-background-clip:text;background-clip:text;color:transparent}
+.pingr-eyebrow{color:var(--lime);text-transform:uppercase;letter-spacing:.22em;font-size:.67rem;font-weight:900;margin-top:.5rem}
+.pingr-subtitle{color:#a8b8ce;font-size:.93rem;margin:.3rem 0 .85rem;letter-spacing:.01em}
+.pingr-rule{height:2px;background:linear-gradient(90deg,var(--cyan),rgba(155,140,255,.65),rgba(183,243,107,0));margin:.9rem 0 1.4rem;border-radius:8px;box-shadow:0 0 22px rgba(53,217,245,.18)}
+h2{font-size:1.28rem!important;margin:1.1rem 0 .7rem!important;font-weight:800!important}
+h3{font-size:1.02rem!important;font-weight:750!important}
+[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(19,36,58,.96),rgba(12,23,39,.98));border:1px solid rgba(113,163,204,.23);border-radius:17px;padding:15px 17px;box-shadow:0 12px 34px rgba(0,0,0,.22),inset 0 1px 0 rgba(255,255,255,.035);min-height:102px;transition:transform .18s ease,border-color .18s ease}
+[data-testid="stMetric"]:hover{transform:translateY(-2px);border-color:rgba(53,217,245,.55)}
+[data-testid="stMetricLabel"]{color:#a8bbd2;font-size:.76rem;letter-spacing:.055em;text-transform:uppercase;font-weight:750}
+[data-testid="stMetricValue"]{color:#f4f8ff;font-weight:850;font-size:1.75rem;letter-spacing:-.055em}
+[data-testid="stMetricDelta"]{font-size:.76rem}
+div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:15px;background:rgba(13,25,42,.78);overflow:hidden}
+.stButton button,.stDownloadButton button{border-radius:11px;border:1px solid rgba(53,217,245,.32);min-height:42px;background:linear-gradient(110deg,rgba(25,71,94,.72),rgba(42,42,87,.72));color:#f3f8ff;font-weight:750;transition:all .18s ease}
+.stButton button:hover,.stDownloadButton button:hover{border-color:var(--cyan);box-shadow:0 0 22px rgba(53,217,245,.16);color:white}
+[data-testid="stDataFrame"]{border:1px solid rgba(133,170,210,.2);border-radius:13px;overflow:hidden;background:rgba(11,20,34,.72)}
+[data-testid="stPlotlyChart"]{border:1px solid rgba(130,160,190,.16);border-radius:15px;background:rgba(10,22,37,.52);padding:5px}
+[data-testid="stAlert"]{border-radius:13px}
+hr{border-color:rgba(133,170,210,.16)!important}
+.stCaption{color:#91a4bb}
+@media(max-width:900px){.block-container{padding:.8rem .8rem 1.7rem}.pingr-title{font-size:2rem}[data-testid="stMetric"]{padding:11px 12px;min-height:88px}[data-testid="stMetricValue"]{font-size:1.4rem}}
+@media(max-width:600px){.block-container{padding:.6rem .6rem 1.3rem}.pingr-title{font-size:1.75rem}[data-testid="stMetricLabel"]{font-size:.66rem}[data-testid="stMetricValue"]{font-size:1.18rem}}
 </style>
 """, unsafe_allow_html=True)
 
-st.markdown('<div class="pingr-eyebrow">Market intelligence workspace</div>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-eyebrow">◈ Market intelligence workspace · Today’s live session</div>', unsafe_allow_html=True)
 st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
-st.markdown('<div class="pingr-subtitle">Today’s Cloudflare R2 logs · Trading intelligence · Detector performance</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-subtitle">Real-time scanner visibility <span style="color:#35d9f5">/</span> Signal intelligence <span style="color:#35d9f5">/</span> Performance analytics</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
 
 class ArchiveUpload(BytesIO):
