@@ -980,6 +980,81 @@ if active_page == "Patterns":
             ("Decisive win rate", f"{wins_here / (wins_here + losses_here) * 100:.1f}%" if wins_here + losses_here else "—"),
         ])
 
+        # Explicit score calibration: show how each recorded original score band
+        # distributes across wins, losses and neutral outcomes.
+        st.subheader("Signal score breakdown")
+        score_field = next((field for field in ["original_score", "signal_score"] if field in frame.columns), None)
+        if score_field:
+            score_values = pd.to_numeric(frame[score_field], errors="coerce")
+            score_bands = [
+                ("≤8", lambda x: x <= 8), ("9–10", lambda x: 9 <= x <= 10),
+                ("11–12", lambda x: 11 <= x <= 12), ("13–16", lambda x: 13 <= x <= 16),
+                ("17+", lambda x: x >= 17),
+            ]
+            score_rows = []
+            for band_label, band_test in score_bands:
+                band = frame[score_values.notna() & score_values.map(band_test)]
+                band_result = band["result"].astype(str).str.lower()
+                w = int(band_result.eq("win").sum())
+                l = int(band_result.eq("loss").sum())
+                n = int(band_result.eq("neutral").sum())
+                score_rows.append({
+                    "Score band": band_label, "Alerts": len(band),
+                    "Wins": w, "Losses": l, "Neutral": n,
+                    "Decisive win rate": f"{w / (w + l) * 100:.1f}%" if w + l else "—",
+                })
+            st.dataframe(pd.DataFrame(score_rows), use_container_width=True, hide_index=True)
+            st.caption("Uses the score recorded with each evaluated alert. Bands are descriptive, not recommended thresholds.")
+            scored_losses = frame[frame["result"].astype(str).str.lower().eq("loss")].copy()
+            scored_losses["_score_numeric"] = pd.to_numeric(scored_losses[score_field], errors="coerce")
+            if not scored_losses.empty:
+                loss_score = scored_losses["_score_numeric"].dropna()
+                if not loss_score.empty:
+                    st.metric("Losing alerts with a recorded score", f"{len(loss_score):,}",
+                              help=f"Median losing-alert score: {loss_score.median():.1f}")
+        else:
+            st.info("No recorded signal-score field is available in this outcome group. The dashboard will not infer scores.")
+
+        # Surface the symbols behind losing outcomes rather than only showing
+        # aggregate winner/loser indicator medians.
+        st.subheader("Losing symbols")
+        if "symbol" in frame.columns:
+            losing = frame[frame["result"].astype(str).str.lower().eq("loss")].copy()
+            if not losing.empty:
+                losing["_pnl_numeric"] = pd.to_numeric(
+                    losing["pnl_percent"] if "pnl_percent" in losing else pd.Series(index=losing.index, dtype="float64"),
+                    errors="coerce",
+                )
+                losing["_score_numeric"] = pd.to_numeric(
+                    losing[score_field] if score_field else pd.Series(index=losing.index, dtype="float64"),
+                    errors="coerce",
+                )
+                losing["symbol"] = losing["symbol"].fillna("Unknown").astype(str)
+                loss_symbols = losing.groupby("symbol", dropna=False).agg(
+                    Losses=("result", "size"),
+                    **{"Average loss %": ("_pnl_numeric", "mean"),
+                       "Median loss %": ("_pnl_numeric", "median"),
+                       "Median score": ("_score_numeric", "median")},
+                ).reset_index().rename(columns={"symbol": "Symbol"})
+                loss_symbols = loss_symbols.sort_values(
+                    ["Losses", "Average loss %"], ascending=[False, True], na_position="last"
+                )
+                loss_symbols["Average loss %"] = loss_symbols["Average loss %"].map(
+                    lambda x: f"{x:+.2f}%" if pd.notna(x) else "—"
+                )
+                loss_symbols["Median loss %"] = loss_symbols["Median loss %"].map(
+                    lambda x: f"{x:+.2f}%" if pd.notna(x) else "—"
+                )
+                loss_symbols["Median score"] = loss_symbols["Median score"].map(
+                    lambda x: f"{x:.1f}" if pd.notna(x) else "—"
+                )
+                st.dataframe(loss_symbols, use_container_width=True, hide_index=True)
+                st.caption("Ranked by number of losing evaluated alerts. Repeated losses on one symbol are shown as counts; this is not a prediction.")
+            else:
+                st.info("No losing symbol outcomes are recorded in this group.")
+        else:
+            st.info("Symbol is not recorded on these outcome rows, so losing symbols cannot be listed.")
+
         specs = list(pattern_specs)
         if mode == "pullback":
             # Add Pullback-specific outcome/management measures only when recorded.
