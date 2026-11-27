@@ -19,45 +19,46 @@ st_autorefresh(interval=7200000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
-:root{--bg:#070b14;--panel:#101b2c;--line:rgba(133,170,210,.18);--muted:#9aabc1;--text:#f3f7ff;--cyan:#d89a52;--lime:#e8c77a;--violet:#b7a58a;--green:#63b7a4;--red:#d77c68}
-.stApp{background:radial-gradient(ellipse at 5% 0%,rgba(173,111,57,.14),transparent 28%),radial-gradient(ellipse at 95% 4%,rgba(89,132,115,.13),transparent 30%),linear-gradient(145deg,#171613 0%,#11110f 52%,#191713 100%);color:var(--text)}
-.stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.10;background-image:linear-gradient(rgba(145,170,205,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(145,170,205,.07) 1px,transparent 1px);background-size:48px 48px;mask-image:linear-gradient(to bottom,black,transparent 72%)}
-.block-container{max-width:1740px;padding:1rem 1.55rem 3rem;position:relative}
-[data-testid="stHeader"]{background:rgba(7,11,20,.70);backdrop-filter:blur(18px)}
-[data-testid="stSidebar"]{background:linear-gradient(180deg,#211e19,#151411);border-right:1px solid rgba(194,158,112,.20)}
-[data-testid="stSidebar"] h1,[data-testid="stSidebar"] h2,[data-testid="stSidebar"] h3{color:var(--text)}
+:root{--bg:#05080f;--panel:#0b1627;--line:rgba(66,184,244,.20);--muted:#91a9c1;--text:#eef7ff;--cyan:#42b8f4;--blue:#168bd0;--ice:#91d7f5;--green:#55c7a5;--red:#f07888}
+.stApp{background:radial-gradient(ellipse at 50% -12%,rgba(20,117,183,.18),transparent 42%),linear-gradient(180deg,#05080f 0%,#07111e 52%,#050a13 100%);color:var(--text)}
+.stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.09;background-image:linear-gradient(rgba(66,184,244,.07) 1px,transparent 1px),linear-gradient(90deg,rgba(66,184,244,.07) 1px,transparent 1px);background-size:52px 52px;mask-image:linear-gradient(to bottom,black,transparent 75%)}
+.block-container{max-width:1480px;padding:1.1rem 2rem 3rem;position:relative}
+[data-testid="stHeader"]{background:rgba(5,8,15,.82);backdrop-filter:blur(16px)}
+[data-testid="stSidebar"],section[data-testid="stSidebar"]{display:none!important}
 h1,h2,h3{letter-spacing:-.045em;color:var(--text)}
-.pingr-hero{position:relative;overflow:hidden;padding:27px 30px 25px;border:1px solid rgba(201,157,102,.30);border-radius:24px;background:linear-gradient(112deg,rgba(43,38,30,.98),rgba(31,34,29,.96) 58%,rgba(40,35,28,.94));box-shadow:0 22px 65px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.06);margin:.25rem 0 1.35rem}
-.pingr-hero:after{content:"";position:absolute;width:340px;height:340px;right:-100px;top:-205px;border-radius:50%;background:radial-gradient(circle,rgba(216,154,82,.22),rgba(99,151,129,.09) 48%,transparent 70%);pointer-events:none}
-.pingr-eyebrow{color:var(--lime);text-transform:uppercase;letter-spacing:.2em;font-size:.66rem;font-weight:900;margin:0 0 .65rem}
-.pingr-title{font-size:clamp(2rem,4vw,3.1rem);font-weight:950;letter-spacing:-.08em;margin:0;color:#f7fbff;line-height:1.04}
-.pingr-title span{background:linear-gradient(100deg,#e5a65e,#e8d0a0 58%,#83b6a1);-webkit-background-clip:text;background-clip:text;color:transparent}
-.pingr-subtitle{color:#c6bba8;font-size:.93rem;margin:.65rem 0 0;letter-spacing:.01em}
-.pingr-hero-meta{display:flex;gap:9px;flex-wrap:wrap;margin-top:19px}
-.pingr-chip{display:inline-block;padding:6px 11px;border:1px solid rgba(137,177,212,.22);border-radius:999px;background:rgba(5,13,25,.35);color:#c4d3e7;font-size:.72rem;font-weight:750;letter-spacing:.02em}
-h2{font-size:1.22rem!important;margin:1rem 0 .75rem!important;font-weight:850!important}
+.pingr-hero{position:relative;overflow:hidden;display:flex;align-items:center;gap:28px;padding:28px 34px;border:1px solid rgba(66,184,244,.27);border-radius:22px;background:linear-gradient(112deg,rgba(7,20,36,.98),rgba(9,28,49,.96) 58%,rgba(9,19,38,.98));box-shadow:0 22px 60px rgba(0,0,0,.28),inset 0 1px 0 rgba(255,255,255,.045);margin:.2rem 0 1.1rem}
+.pingr-hero:after{content:"";position:absolute;width:370px;height:370px;right:-115px;top:-225px;border-radius:50%;background:radial-gradient(circle,rgba(35,164,226,.18),rgba(17,91,151,.06) 48%,transparent 70%);pointer-events:none}
+.pingr-brand{position:relative;z-index:1;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:150px}
+.pingr-radar{width:72px;height:72px;border-radius:50%;position:relative;background:repeating-radial-gradient(circle,transparent 0 4px,rgba(48,174,239,.55) 4.7px 5.5px,transparent 6px 9px);filter:drop-shadow(0 0 8px rgba(43,174,240,.22))}
+.pingr-radar:after{content:"";position:absolute;width:9px;height:9px;border-radius:50%;background:#42b8f4;left:50%;top:50%;transform:translate(-50%,-50%);box-shadow:0 0 10px #42b8f4}
+.pingr-wordmark{font-size:2.65rem;line-height:1.05;font-weight:400;letter-spacing:-.07em;color:#42b8f4;text-shadow:0 2px 0 #176b9e}
+.pingr-hero-copy{position:relative;z-index:1;min-width:0}
+.pingr-eyebrow{color:#91d7f5;text-transform:uppercase;letter-spacing:.19em;font-size:.66rem;font-weight:850;margin:0 0 .55rem}
+.pingr-title{font-size:clamp(1.75rem,3.4vw,2.65rem);font-weight:900;letter-spacing:-.075em;margin:0;color:#f3f8ff;line-height:1.05}
+.pingr-title span{background:linear-gradient(100deg,#42b8f4,#91d7f5);-webkit-background-clip:text;background-clip:text;color:transparent}
+.pingr-subtitle{color:#a9bfd4;font-size:.93rem;margin:.55rem 0 0}
+.pingr-hero-meta{display:flex;gap:8px;flex-wrap:wrap;margin-top:15px}
+.pingr-chip{display:inline-block;padding:6px 10px;border:1px solid rgba(66,184,244,.23);border-radius:999px;background:rgba(4,13,24,.58);color:#c7e4f6;font-size:.70rem;font-weight:750}
+h2{font-size:1.2rem!important;margin:1rem 0 .7rem!important;font-weight:850!important}
 h3{font-size:1rem!important;font-weight:800!important}
-[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(48,43,35,.98),rgba(29,29,25,.99));border:1px solid rgba(190,153,108,.25);border-radius:19px;padding:16px 18px;box-shadow:0 13px 32px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.045);min-height:108px;transition:transform .18s ease,border-color .18s ease,box-shadow .18s ease}
-[data-testid="stMetric"]:hover{transform:translateY(-3px);border-color:rgba(216,154,82,.58);box-shadow:0 17px 38px rgba(0,0,0,.27),0 0 24px rgba(216,154,82,.08)}
-[data-testid="stMetricLabel"]{color:#c1b6a4;font-size:.72rem;letter-spacing:.075em;text-transform:uppercase;font-weight:800}
-[data-testid="stMetricValue"]{color:#f4f8ff;font-weight:900;font-size:1.85rem;letter-spacing:-.06em}
-[data-testid="stMetricDelta"]{font-size:.76rem}
-div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:16px;background:rgba(13,25,42,.78);overflow:hidden}
-.stButton button,.stDownloadButton button{border-radius:12px;border:1px solid rgba(216,154,82,.38);min-height:43px;background:linear-gradient(110deg,rgba(103,69,39,.86),rgba(55,66,52,.88));color:#f3f8ff;font-weight:800;transition:all .18s ease}
-.stButton button:hover,.stDownloadButton button:hover{border-color:var(--cyan);box-shadow:0 0 22px rgba(216,154,82,.16);color:white}
-[data-testid="stDataFrame"]{border:1px solid rgba(133,170,210,.22);border-radius:15px;overflow:hidden;background:rgba(11,20,34,.76)}
-button[data-baseweb="tab"]{color:#9fb3cc!important;font-weight:800!important;padding:11px 15px!important;border:1px solid transparent!important;border-radius:12px 12px 0 0!important}
-button[data-baseweb="tab"][aria-selected="true"]{color:#e5b36f!important;background:rgba(117,83,47,.20)!important;border:1px solid rgba(216,154,82,.24)!important;border-bottom:2px solid #d89a52!important}
-[data-testid="stTabs"] [data-baseweb="tab-list"]{gap:5px;border-bottom:1px solid rgba(133,170,210,.18);margin-bottom:18px;flex-wrap:wrap}
+[data-testid="stMetric"]{background:linear-gradient(145deg,rgba(13,34,56,.96),rgba(8,20,35,.98));border:1px solid rgba(66,184,244,.22);border-radius:16px;padding:15px 17px;box-shadow:0 10px 28px rgba(0,0,0,.20),inset 0 1px 0 rgba(255,255,255,.04);min-height:100px}
+[data-testid="stMetric"]:hover{border-color:rgba(66,184,244,.55);box-shadow:0 14px 32px rgba(0,0,0,.24),0 0 22px rgba(36,159,222,.08)}
+[data-testid="stMetricLabel"]{color:#9ebbd2;font-size:.71rem;letter-spacing:.065em;text-transform:uppercase;font-weight:800}
+[data-testid="stMetricValue"]{color:#f3f9ff;font-weight:900;font-size:1.75rem;letter-spacing:-.055em}
+div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:14px;background:rgba(9,22,38,.82);overflow:hidden}
+.stButton button,.stDownloadButton button{border-radius:11px;border:1px solid rgba(66,184,244,.36);min-height:41px;background:linear-gradient(110deg,rgba(13,69,105,.9),rgba(12,43,76,.92));color:#f2f9ff;font-weight:800}
+.stButton button:hover,.stDownloadButton button:hover{border-color:#91d7f5;box-shadow:0 0 20px rgba(66,184,244,.17);color:white}
+[data-testid="stDataFrame"]{border:1px solid rgba(66,184,244,.18);border-radius:13px;overflow:hidden;background:rgba(7,17,30,.82)}
+button[data-baseweb="tab"]{color:#9eb6cb!important;font-weight:800!important;padding:11px 14px!important;border:1px solid transparent!important;border-radius:10px 10px 0 0!important}
+button[data-baseweb="tab"][aria-selected="true"]{color:#72cefa!important;background:rgba(22,112,165,.16)!important;border:1px solid rgba(66,184,244,.22)!important;border-bottom:2px solid #42b8f4!important}
+[data-testid="stTabs"] [data-baseweb="tab-list"]{gap:5px;border-bottom:1px solid rgba(66,184,244,.17);margin-bottom:18px;flex-wrap:wrap}
 [data-testid="stTabs"] [data-baseweb="tab-panel"]{padding-top:13px}
-[data-testid="stPlotlyChart"]{border:1px solid rgba(174,145,107,.20);border-radius:18px;background:linear-gradient(145deg,rgba(39,36,30,.82),rgba(25,25,22,.78));padding:7px;box-shadow:0 12px 32px rgba(0,0,0,.13)}
-[data-testid="stAlert"]{border-radius:14px}
-hr{border-color:rgba(133,170,210,.16)!important}
-.stCaption{color:#91a4bb}
-[data-testid="stSidebar"] [data-testid="stMetric"]{min-height:82px;padding:12px 14px}
-[data-testid="stSidebar"] [data-testid="stMetricValue"]{font-size:1.45rem}
-@media(max-width:900px){.block-container{padding:.75rem .8rem 1.7rem}.pingr-hero{padding:22px 21px;border-radius:19px}.pingr-title{font-size:2.25rem}[data-testid="stMetric"]{padding:11px 12px;min-height:88px}[data-testid="stMetricValue"]{font-size:1.4rem}}
-@media(max-width:600px){.block-container{padding:.55rem .55rem 1.3rem}.pingr-hero{padding:18px 16px}.pingr-title{font-size:1.9rem}[data-testid="stMetricLabel"]{font-size:.66rem}[data-testid="stMetricValue"]{font-size:1.18rem}}
+[data-testid="stPlotlyChart"]{border:1px solid rgba(66,184,244,.18);border-radius:16px;background:linear-gradient(145deg,rgba(10,26,44,.86),rgba(6,15,27,.82));padding:6px;box-shadow:0 10px 28px rgba(0,0,0,.14)}
+[data-testid="stAlert"]{border-radius:13px}
+hr{border-color:rgba(66,184,244,.16)!important}
+.stCaption{color:#8fa9c1}
+@media(max-width:900px){.block-container{padding:.8rem .9rem 1.7rem}.pingr-hero{padding:21px 20px;gap:20px}.pingr-brand{min-width:112px}.pingr-radar{width:58px;height:58px}.pingr-wordmark{font-size:2.15rem}[data-testid="stMetric"]{padding:11px 12px;min-height:86px}[data-testid="stMetricValue"]{font-size:1.35rem}}
+@media(max-width:600px){.block-container{padding:.55rem .6rem 1.3rem}.pingr-hero{padding:17px 15px;gap:13px}.pingr-brand{min-width:78px}.pingr-radar{width:46px;height:46px}.pingr-wordmark{font-size:1.65rem}.pingr-title{font-size:1.65rem}.pingr-subtitle{font-size:.82rem}[data-testid="stMetricLabel"]{font-size:.64rem}[data-testid="stMetricValue"]{font-size:1.12rem}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -154,11 +155,19 @@ def load_archive():
         "objects": objects
     }
 
-st.sidebar.header("R2 connection")
 today_label = datetime.now(ZoneInfo("Asia/Karachi")).strftime("%d %b %Y")
-st.sidebar.caption(f"Source: Cloudflare R2 · today only: {today_label} PKT")
-if st.sidebar.button("Refresh archive now", use_container_width=True):
-    st.cache_data.clear()
+control_left, control_right = st.columns([1, 5])
+with control_left:
+    if st.button("↻  Refresh archive", use_container_width=True):
+        st.cache_data.clear()
+        st.rerun()
+with control_right:
+    st.markdown(
+        f'<div style="padding:10px 14px;border:1px solid rgba(66,184,244,.18);border-radius:11px;background:rgba(8,24,40,.72);color:#a9c5da;font-size:.82rem">'
+        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; Today only: {today_label} PKT'
+        f' &nbsp;·&nbsp; Auto-refresh every 2 hours &nbsp;·&nbsp; Bucket: pingr / pingr/logs/</div>',
+        unsafe_allow_html=True
+    )
 try:
     with st.spinner("Reading Pingr snapshots directly from Cloudflare R2…"):
         archive_files, archive_status = load_archive()
@@ -167,16 +176,19 @@ except Exception as exc:
     st.info("Check that the deployed archive Worker exposes /dashboard/index and /dashboard/file.")
     st.stop()
 uploads = [ArchiveUpload(name, content) for name, content in archive_files]
-st.sidebar.metric("R2 objects loaded", f'{archive_status["loaded"]:,}')
-st.sidebar.caption(f'Latest R2 object: {archive_status["updated"]}')
+status_cols = st.columns(3)
+status_cols[0].metric("R2 objects loaded", f'{archive_status["loaded"]:,}')
+status_cols[1].metric("Latest R2 object", archive_status["updated"])
+status_cols[2].metric("Read errors", f'{len(archive_status["errors"]):,}')
 if archive_status["last_sync"]:
-    st.sidebar.caption(f'Last GitHub mirror sync: {archive_status["last_sync"].get("completedAt", "status available")}')
+    st.caption(f'Last GitHub mirror sync: {archive_status["last_sync"].get("completedAt", "status available")}')
 if archive_status["errors"]:
-    with st.sidebar.expander(f'{len(archive_status["errors"])} R2 object(s) could not be read'):
+    with st.expander(f'{len(archive_status["errors"])} R2 object(s) could not be read'):
         st.write(archive_status["errors"])
 else:
-    st.sidebar.success("R2 archive read completed without file errors.")
-st.sidebar.caption("Today’s R2 files only · automatic refresh every 2 hours · individual files cached by key, size and upload time.")
+    st.success("R2 archive read completed without file errors.")
+st.caption("Individual archive files are cached by key, size and upload time.")
+
 
 def parse_files(files):
     per_file, errors = {}, []
@@ -487,18 +499,17 @@ latest_time_pak = latest_time.tz_convert("Asia/Karachi").strftime("%d %b %Y · %
 
 today_hero_label = datetime.now(ZoneInfo("Asia/Karachi")).strftime("%a · %d %b %Y")
 st.markdown(
-    f'<div class="pingr-hero"><div class="pingr-eyebrow">◈ PINGR / MARKET INTELLIGENCE WORKSPACE</div>'
+    f'<div class="pingr-hero">'
+    f'<div class="pingr-brand"><div class="pingr-radar"></div><div class="pingr-wordmark">pingr</div></div>'
+    f'<div class="pingr-hero-copy"><div class="pingr-eyebrow">Market intelligence workspace</div>'
     f'<div class="pingr-title">PINGR <span>ANALYTICS</span></div>'
     f'<div class="pingr-subtitle">Scanner performance · Signal quality · Coin intelligence</div>'
-    f'<div class="pingr-hero-meta"><span class="pingr-chip">◉ R2 CONNECTED</span>'
+    f'<div class="pingr-hero-meta"><span class="pingr-chip">● R2 CONNECTED</span>'
     f'<span class="pingr-chip">▣ {today_hero_label} · PKT</span>'
-    f'<span class="pingr-chip">↻ 2-HOUR ARCHIVE CYCLE</span></div></div>',
+    f'<span class="pingr-chip">↻ 2-HOUR ARCHIVE CYCLE</span></div></div></div>',
     unsafe_allow_html=True
 )
 
-# Keep the archive controls compact and out of the main analysis.
-st.sidebar.caption("Bucket: pingr · prefix: pingr/logs/")
-st.sidebar.caption("Manual refresh is available above.")
 
 
 # High-level navigation: keep the primary intelligence visible without a long continuous scroll.
@@ -532,13 +543,13 @@ with tab_overview:
     if closed_count:
         outcome_mix = pd.DataFrame({"Outcome": ["Wins", "Losses", "Neutral"], "Alerts": [wins, losses, neutral]})
         outcome_fig = px.pie(outcome_mix, names="Outcome", values="Alerts", hole=.68,
-                             color="Outcome", color_discrete_map={"Wins":"#63b7a4","Losses":"#d77c68","Neutral":"#a99b83"})
+                             color="Outcome", color_discrete_map={"Wins":"#55c7a5","Losses":"#f07888","Neutral":"#7893aa"})
         outcome_fig.update_traces(textinfo="percent", textposition="inside",
-                                  marker=dict(line=dict(color="#191713", width=3)),
+                                  marker=dict(line=dict(color="#07111e", width=3)),
                                   hovertemplate="%{label}: %{value}<extra></extra>")
         outcome_fig.update_layout(template="plotly_dark", height=340, showlegend=True,
                                   margin=dict(l=12,r=12,t=12,b=12), paper_bgcolor="rgba(0,0,0,0)",
-                                  plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#eee5d8"),
+                                  plot_bgcolor="rgba(0,0,0,0)", font=dict(color="#eaf5ff"),
                                   legend=dict(orientation="h",y=-.06,x=.5,xanchor="center"))
         st.plotly_chart(outcome_fig,use_container_width=True,config={"displayModeBar":False})
     else:
@@ -549,15 +560,15 @@ with tab_overview:
     if closed_count:
         return_fig = px.histogram(valid, x="final_percent", nbins=18,
                                   labels={"final_percent":"Final return (%)"},
-                                  color_discrete_sequence=["#d89a52"])
+                                  color_discrete_sequence=["#42b8f4"])
         return_fig.update_layout(template="plotly_dark",height=340,
                                  margin=dict(l=12,r=12,t=12,b=12),
                                  paper_bgcolor="rgba(0,0,0,0)",plot_bgcolor="rgba(0,0,0,0)",
                                  font=dict(color="#eee5d8"),showlegend=False,
                                  xaxis_title="Final return (%)",yaxis_title="Closed alerts",
                                  bargap=.10)
-        return_fig.update_xaxes(gridcolor="rgba(205,180,145,.12)",zerolinecolor="rgba(232,199,122,.45)")
-        return_fig.update_yaxes(gridcolor="rgba(205,180,145,.12)")
+        return_fig.update_xaxes(gridcolor="rgba(66,184,244,.12)",zerolinecolor="rgba(66,184,244,.45)")
+        return_fig.update_yaxes(gridcolor="rgba(66,184,244,.12)")
         st.plotly_chart(return_fig,use_container_width=True,config={"displayModeBar":False})
     else:
         st.info("Return distribution will appear when closed alert records are available." )
@@ -577,30 +588,28 @@ with tab_scanner:
         ("Unique evaluated alert IDs", f"{unique_evaluated:,}"),
     ])
     event_mix = generic.get("event_type", pd.Series(dtype="object")).fillna("unknown").astype(str).value_counts()
-    left, right = st.columns(2)
-    with left:
-        st.subheader("Other event types in the logs")
-        if not event_mix.empty:
-            event_mix_df = event_mix.rename_axis("Event type").reset_index(name="Records")
-            st.dataframe(event_mix_df, use_container_width=True, hide_index=True)
-        else:
-            st.info("No separate scanner/diagnostic event types were found in today's logs.")
-    with right:
-        st.subheader("Recorded diagnostic stages and reasons")
-        diagnostic_parts = []
-        if "diagnostic.stage" in generic.columns:
-            stages = generic["diagnostic.stage"].dropna().astype(str).value_counts()
-            if not stages.empty:
-                diagnostic_parts.append(stages.rename_axis("Stage").reset_index(name="Records"))
-        if "diagnostic.reason" in generic.columns:
-            reasons = generic["diagnostic.reason"].dropna().astype(str).value_counts().head(12)
-            if not reasons.empty:
-                diagnostic_parts.append(reasons.rename_axis("Reason").reset_index(name="Records"))
-        if diagnostic_parts:
-            for part in diagnostic_parts:
-                st.dataframe(part, use_container_width=True, hide_index=True)
-        else:
-            st.info("Stage/rejection breakdown is not available in the current log fields. No funnel counts are inferred.")
+    st.subheader("Other event types in the logs")
+    if not event_mix.empty:
+        event_mix_df = event_mix.rename_axis("Event type").reset_index(name="Records")
+        st.dataframe(event_mix_df, use_container_width=True, hide_index=True)
+    else:
+        st.info("No separate scanner/diagnostic event types were found in today's logs.")
+
+    st.subheader("Recorded diagnostic stages and reasons")
+    diagnostic_parts = []
+    if "diagnostic.stage" in generic.columns:
+        stages = generic["diagnostic.stage"].dropna().astype(str).value_counts()
+        if not stages.empty:
+            diagnostic_parts.append(stages.rename_axis("Stage").reset_index(name="Records"))
+    if "diagnostic.reason" in generic.columns:
+        reasons = generic["diagnostic.reason"].dropna().astype(str).value_counts().head(12)
+        if not reasons.empty:
+            diagnostic_parts.append(reasons.rename_axis("Reason").reset_index(name="Records"))
+    if diagnostic_parts:
+        for part in diagnostic_parts:
+            st.dataframe(part, use_container_width=True, hide_index=True)
+    else:
+        st.info("Stage/rejection breakdown is not available in the current log fields. No funnel counts are inferred.")
 
     st.caption("These are log-derived counts, not a scanner funnel. Distinct symbols in the logs do not necessarily equal symbols scanned. A true scanned → qualified → rejected → alerted funnel requires explicit scanner-stage events.")
 
@@ -618,7 +627,7 @@ with tab_detectors:
         chart = perf_all.sort_values("avg_return", ascending=True)
         fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
                      text=chart["avg_return"].map(lambda x: f"{x:+.2f}%"),
-                     color="avg_return", color_continuous_scale=["#d77c68", "#8b806c", "#63b7a4"],
+                     color="avg_return", color_continuous_scale=["#f07888", "#315b7a", "#55c7a5"],
                      labels={"avg_return": "Average final return", "detector": ""})
         fig.update_layout(template="plotly_dark", height=max(220, 65 * len(chart)),
                           margin=dict(l=8, r=12, t=8, b=8), paper_bgcolor="rgba(0,0,0,0)",
