@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import json
 import hashlib
+import html
 from io import BytesIO
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -19,6 +20,12 @@ st_autorefresh(interval=7200000, key="pingr_archive_auto_refresh")
 
 st.markdown("""
 <style>
+/* Prevent mobile viewport/page-level horizontal overflow. */
+html,body{width:100%!important;max-width:100vw!important;overflow-x:hidden!important;box-sizing:border-box!important}
+.stApp,[data-testid="stAppViewContainer"],[data-testid="stMain"],[data-testid="stMainBlockContainer"],.block-container{width:100%!important;max-width:100vw!important;min-width:0!important;overflow-x:hidden!important;box-sizing:border-box!important}
+.winner-ledger,.winner-card,.winner-fields,.winner-field{width:100%;max-width:100%;min-width:0;box-sizing:border-box}
+.winner-card{overflow-wrap:anywhere}
+@media(max-width:767px){.block-container{padding-left:10px!important;padding-right:10px!important}.winner-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.winner-card{margin-left:0!important;margin-right:0!important}}
 :root{--bg:#030b16;--panel:#071a2b;--panel2:#0a2238;--line:rgba(22,177,238,.48);--cyan:#16c9f5;--blue:#168bd0;--ice:#91e8ff;--green:#39e75f;--red:#ff5b63;--muted:#9bb6cb;--text:#f2f8ff}
 .stApp{background:radial-gradient(ellipse at 76% -8%,rgba(0,173,237,.20),transparent 36%),linear-gradient(145deg,#020813,#06182a 58%,#020b17);color:var(--text)}
 .stApp:before{content:"";position:fixed;inset:0;pointer-events:none;opacity:.10;background:repeating-radial-gradient(circle at 0% 82%,transparent 0 26px,rgba(22,201,245,.55) 27px 28px,transparent 29px 43px);mask-image:linear-gradient(90deg,black,transparent 24%)}
@@ -102,6 +109,22 @@ hr{border-color:rgba(22,177,238,.16)!important}
  .kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
  .block-container{padding:.75rem .7rem 2rem}
 }
+
+/* Responsive, vertically stacked winner ledger: never render a wide table on mobile. */
+.winner-ledger{display:grid;grid-template-columns:minmax(0,1fr);gap:11px;margin:8px 0 4px}
+.winner-card{min-width:0;border:1px solid rgba(22,177,238,.38);border-radius:13px;background:linear-gradient(145deg,rgba(8,30,49,.98),rgba(3,14,27,.98));padding:12px 13px;box-shadow:0 4px 16px rgba(0,0,0,.14)}
+.winner-card-head{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:6px 12px;padding-bottom:9px;margin-bottom:9px;border-bottom:1px solid rgba(22,177,238,.22)}
+.winner-card-title{font-size:.98rem;font-weight:900;color:#f3f9ff;overflow-wrap:anywhere}
+.winner-card-pnl{font-size:1rem;font-weight:900;color:#39e75f;white-space:nowrap}
+.winner-section-label{font-size:.62rem;letter-spacing:.12em;font-weight:900;color:#58d9ff;margin:9px 0 6px}
+.winner-fields{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.winner-field{min-width:0;border:1px solid rgba(22,177,238,.14);border-radius:8px;background:rgba(2,12,23,.55);padding:7px 8px}
+.winner-field-label{display:block;color:#91abc0;font-size:.62rem;font-weight:800;letter-spacing:.04em;margin-bottom:3px}
+.winner-field-value{display:block;color:#f0f6fc;font-size:.79rem;font-weight:700;overflow-wrap:anywhere;word-break:break-word}
+.winner-field-value.missing{color:#9bb0c1;font-weight:500}
+.winner-card-meta{color:#829db2;font-size:.66rem;margin-top:9px;overflow-wrap:anywhere}
+@media(max-width:560px){.winner-card{padding:10px}.winner-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.winner-card-title{font-size:.9rem}.winner-field-value{font-size:.75rem}}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -368,12 +391,14 @@ def latest_outcomes(outcomes):
 
 
 
-def enrich_alert_records_with_outcomes(alert_records, outcomes, tolerance_seconds=15):
+def enrich_alert_records_with_outcomes(alert_records, outcomes, tolerance_seconds=180):
     """
     Attach outcome data only when an alert_record can be uniquely linked.
-    Build 4.4.1 creates alert_id as SYMBOL_<unix-seconds>; alert_record stores
-    alert_time but omits alert_id. We therefore require exact symbol plus a
-    unique alert_id epoch within a narrow time window. Symbol-only joins are forbidden.
+    Build 4.4.1 creates alert_id as SYMBOL_<unix-seconds> immediately before
+    Discord dispatch; build_alert_record captures alert_time after dispatch and
+    additional market-data lookups. A 15-second tolerance can therefore miss
+    the correct outcome. Allow up to 180 seconds, but still require exact symbol,
+    one unique candidate ID, and one-to-one ID usage. Symbol-only joins are forbidden.
     """
     base = alert_records.copy().reset_index(drop=True)
     latest = latest_outcomes(outcomes)
@@ -885,34 +910,61 @@ if active_page == "Overview":
         if not winning_alerts.empty:
             enriched = enrich_alert_records_with_outcomes(winning_alerts, outcomes)
 
-            # Match R2 signal_quality_snapshot only by same symbol and nearest
-            # timestamp within 180 seconds. Ties and distant snapshots are rejected.
+            # R2 writes two different quality snapshots for the same symbol:
+            # post_market_data_pre_gates contains liquidity/volume/price, while
+            # post_indicator_pre_rsi_gate contains RSI and MACD. Do not let the
+            # nearest pre-indicator snapshot mask fields from the indicator snapshot.
+            # Each match still requires same symbol + nearest timestamp <=180s;
+            # equidistant ties are rejected and no symbol-only join is allowed.
             quality = combined[combined.get("event_type", pd.Series(index=combined.index, dtype="object")).eq("signal_quality_snapshot")].copy()
             quality["_quality_ts"] = pd.to_datetime(quality.get("timestamp", pd.Series(index=quality.index)), errors="coerce", utc=True)
-            enriched["quality_volume_24h"] = pd.NA
-            enriched["quality_volume_5m"] = pd.NA
-            enriched["quality_volume_15m"] = pd.NA
-            enriched["quality_price_5m"] = pd.NA
-            for idx, alert in enriched.iterrows():
+            quality["_quality_stage"] = quality.get("diagnostic.stage", pd.Series("", index=quality.index)).fillna("").astype(str)
+            quality["_quality_symbol"] = quality.get("symbol", pd.Series("", index=quality.index)).fillna("").astype(str)
+            quality_fields = [
+                "quality_volume_24h", "quality_volume_5m", "quality_volume_15m",
+                "quality_price_5m", "quality_price_15m", "quality_rsi_15m"
+            ]
+            for field in quality_fields:
+                enriched[field] = pd.NA
+            enriched["quality_market_match_status"] = "No unique market snapshot within 180s"
+            enriched["quality_indicator_match_status"] = "No unique indicator snapshot within 180s"
+
+            def nearest_quality_snapshot(alert, stage):
                 alert_time = pd.to_datetime(alert.get("alert_time"), errors="coerce", utc=True)
                 if pd.isna(alert_time) or quality.empty:
-                    continue
-                candidates = quality[quality.get("symbol", pd.Series(index=quality.index, dtype="object")).astype(str).eq(str(alert.get("symbol", "")))].copy()
+                    return None
+                candidates = quality[
+                    quality["_quality_symbol"].eq(str(alert.get("symbol", "")))
+                    & quality["_quality_stage"].eq(stage)
+                ].copy()
                 if candidates.empty:
-                    continue
+                    return None
                 candidates["_gap_seconds"] = (candidates["_quality_ts"] - alert_time).abs().dt.total_seconds()
-                candidates = candidates[candidates["_gap_seconds"].notna() & (candidates["_gap_seconds"] <= 180)].sort_values("_gap_seconds")
+                candidates = candidates[
+                    candidates["_gap_seconds"].notna() & (candidates["_gap_seconds"] <= 180)
+                ].sort_values("_gap_seconds")
                 if candidates.empty:
-                    continue
-                if len(candidates) > 1 and abs(float(candidates.iloc[1]["_gap_seconds"]) - float(candidates.iloc[0]["_gap_seconds"])) < 0.001:
-                    continue
-                nearest = candidates.iloc[0]
-                # prepare() flattens nested JSON with dots, so read the normalized
-                # diagnostic columns directly rather than expecting a nested dict.
-                enriched.at[idx, "quality_volume_24h"] = nearest.get("diagnostic.volume_24h_quote_usdt", pd.NA)
-                enriched.at[idx, "quality_volume_5m"] = nearest.get("diagnostic.volume_spike_5m", pd.NA)
-                enriched.at[idx, "quality_volume_15m"] = nearest.get("diagnostic.volume_spike_15m", pd.NA)
-                enriched.at[idx, "quality_price_5m"] = nearest.get("diagnostic.price_change_5m_pct", pd.NA)
+                    return None
+                if len(candidates) > 1 and abs(
+                    float(candidates.iloc[1]["_gap_seconds"]) - float(candidates.iloc[0]["_gap_seconds"])
+                ) < 0.001:
+                    return None
+                return candidates.iloc[0]
+
+            for idx, alert in enriched.iterrows():
+                market = nearest_quality_snapshot(alert, "post_market_data_pre_gates")
+                if market is not None:
+                    enriched.at[idx, "quality_volume_24h"] = market.get("diagnostic.volume_24h_quote_usdt", pd.NA)
+                    enriched.at[idx, "quality_volume_5m"] = market.get("diagnostic.volume_spike_5m", pd.NA)
+                    enriched.at[idx, "quality_volume_15m"] = market.get("diagnostic.volume_spike_15m", pd.NA)
+                    enriched.at[idx, "quality_price_5m"] = market.get("diagnostic.price_change_5m_pct", pd.NA)
+                    enriched.at[idx, "quality_price_15m"] = market.get("diagnostic.price_change_15m_pct", pd.NA)
+                    enriched.at[idx, "quality_market_match_status"] = "Matched market snapshot"
+
+                indicators = nearest_quality_snapshot(alert, "post_indicator_pre_rsi_gate")
+                if indicators is not None:
+                    enriched.at[idx, "quality_rsi_15m"] = indicators.get("diagnostic.rsi_15m", pd.NA)
+                    enriched.at[idx, "quality_indicator_match_status"] = "Matched indicator snapshot"
 
             def first_numeric(frame, fields):
                 values = pd.Series(index=frame.index, dtype="float64")
@@ -921,37 +973,21 @@ if active_page == "Overview":
                         values = values.combine_first(pd.to_numeric(frame[field], errors="coerce"))
                 return values
 
-            def first_source(frame, fields):
-                values = pd.Series(index=frame.index, dtype="object")
-                for field in fields:
-                    if field in frame.columns:
-                        values = values.where(values.notna(), frame[field])
-                return values
-
-            def format_bool(value):
-                if isinstance(value, bool):
-                    return "Bullish" if value else "Not bullish"
-                if pd.isna(value):
-                    return "—"
-                if str(value).strip().lower() in ("true", "1", "yes"):
-                    return "Bullish"
-                if str(value).strip().lower() in ("false", "0", "no"):
-                    return "Not bullish"
-                return "—"
-
             winner_view = pd.DataFrame(index=enriched.index)
             parsed_time = pd.to_datetime(enriched.get("alert_time", pd.Series(index=enriched.index)), errors="coerce", utc=True)
             winner_view["Alert time (PKT)"] = parsed_time.dt.tz_convert("Asia/Karachi").dt.strftime("%d %b · %H:%M:%S").fillna("—")
             winner_view["Symbol"] = enriched.get("symbol", pd.Series("Unknown", index=enriched.index)).fillna("Unknown")
             winner_view["Signal"] = enriched.get("detector", pd.Series("Unknown", index=enriched.index)).fillna("Unknown")
-            winner_view["Alert ID"] = enriched.get("matched_alert_id", pd.Series(pd.NA, index=enriched.index)).fillna("—")
 
+            # Prefer exact fields from the R2 alert/outcome records, then fill gaps
+            # from the timestamp- and stage-matched R2 quality snapshots.
             score = first_numeric(enriched, ["signal_score", "score", "original_score"])
-            volume5 = first_numeric(enriched, ["original_volume_5m", "quality_volume_5m"])
-            volume15 = first_numeric(enriched, ["vol_ratio", "quality_volume_15m"])
-            price5 = first_numeric(enriched, ["original_price_change_5m", "quality_price_5m"])
-            rsi15 = first_numeric(enriched, ["rsi_14", "rsi", "original_rsi_15m"])
-            liquidity = first_numeric(enriched, ["original_volume_24h", "quality_volume_24h"]).replace(0, float("nan"))
+            volume5 = first_numeric(enriched, ["original_volume_5m", "volume_spike_5m", "quality_volume_5m"])
+            volume15 = first_numeric(enriched, ["original_volume_15m", "volume_spike_15m", "vol_ratio", "quality_volume_15m"])
+            price5 = first_numeric(enriched, ["original_price_change_5m", "price_change_5m", "quality_price_5m"])
+            price15 = first_numeric(enriched, ["original_price_change_15m", "price_change_15m", "quality_price_15m"])
+            rsi15 = first_numeric(enriched, ["rsi_15m", "rsi_14", "rsi", "original_rsi_15m", "quality_rsi_15m"])
+            liquidity = first_numeric(enriched, ["original_volume_24h", "original_quote_volume_24h", "original_turnover_24h", "volume_24h_quote_usdt", "quality_volume_24h"]).replace(0, float("nan"))
             pnl = first_numeric(enriched, ["final_percent"])
             peak = first_numeric(enriched, ["peak_percent"])
             worst = first_numeric(enriched, ["worst_percent"])
@@ -961,14 +997,8 @@ if active_page == "Overview":
             winner_view["5m volume ratio"] = volume5.map(lambda x: f"{x:.2f}×" if pd.notna(x) else "—")
             winner_view["15m volume ratio"] = volume15.map(lambda x: f"{x:.2f}×" if pd.notna(x) else "—")
             winner_view["5m price change"] = price5.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
+            winner_view["15m price change"] = price15.map(lambda x: f"{x:+.2f}%" if pd.notna(x) else "—")
             winner_view["15m RSI"] = rsi15.map(lambda x: f"{x:.1f}" if pd.notna(x) else "—")
-            for field, label in [
-                ("macd_5m", "MACD 5m"),
-                ("macd_15m", "MACD 15m"),
-                ("macd_1h", "MACD 1h"),
-            ]:
-                macd = first_source(enriched, [field, "original_" + field])
-                winner_view[label] = macd.map(format_bool)
             winner_view["24h quote liquidity (USDT)"] = liquidity.map(
                 lambda x: compact_volume(x) if pd.notna(x) else "Not captured"
             )
@@ -981,17 +1011,71 @@ if active_page == "Overview":
             winner_view["_sort_pnl"] = pnl
             winner_view = winner_view.sort_values("_sort_pnl", ascending=False, na_position="last").drop(columns=["_sort_pnl"])
             winner_columns = [
-                "Alert time (PKT)", "Symbol", "Signal", "Alert ID", "Score",
-                "5m volume ratio", "15m volume ratio", "5m price change", "15m RSI",
-                "MACD 5m", "MACD 15m", "MACD 1h", "24h quote liquidity (USDT)",
+                "Alert time (PKT)", "Symbol", "Signal", "Score",
+                "5m volume ratio", "15m volume ratio", "5m price change", "15m price change", "15m RSI",
+                "24h quote liquidity (USDT)",
                 "Peak move", "Worst move", "Final P&L", "Minutes held", "Exit reason"
             ]
             winner_view = winner_view[winner_columns]
-            st.dataframe(winner_view, use_container_width=True, hide_index=True)
+
+            # Mobile-first cards keep every winner in one section without a wide,
+            # horizontally scrollable dataframe. All values remain log-derived.
+            def winner_field(label, value):
+                value = "Not captured" if pd.isna(value) or str(value).strip() in ("", "—") else str(value)
+                missing = " missing" if value == "Not captured" else ""
+                return (
+                    '<div class="winner-field">'
+                    f'<span class="winner-field-label">{html.escape(str(label))}</span>'
+                    f'<span class="winner-field-value{missing}">{html.escape(value)}</span>'
+                    '</div>'
+                )
+
+            cards = []
+            for row_number, (_, record) in enumerate(winner_view.iterrows(), 1):
+                identity = [
+                    ("Alert time (PKT)", record.get("Alert time (PKT)", "—")),
+                    ("Signal", record.get("Signal", "—")),
+                    ("Score", record.get("Score", "—")),
+                ]
+                signal_fields = [
+                    ("5m volume ratio", record.get("5m volume ratio", "—")),
+                    ("15m volume ratio", record.get("15m volume ratio", "—")),
+                    ("5m price change", record.get("5m price change", "—")),
+                    ("15m price change", record.get("15m price change", "—")),
+                    ("15m RSI", record.get("15m RSI", "—")),
+                    ("24h quote liquidity (USDT)", record.get("24h quote liquidity (USDT)", "Not captured")),
+                ]
+                outcome_fields = [
+                    ("Peak move", record.get("Peak move", "—")),
+                    ("Worst move", record.get("Worst move", "—")),
+                    ("Final P&L", record.get("Final P&L", "—")),
+                    ("Minutes held", record.get("Minutes held", "—")),
+                    ("Exit reason", record.get("Exit reason", "—")),
+                ]
+                identity_html = "".join(winner_field(label, value) for label, value in identity)
+                signal_html = "".join(winner_field(label, value) for label, value in signal_fields)
+                outcome_html = "".join(winner_field(label, value) for label, value in outcome_fields)
+                pnl_value = str(record.get("Final P&L", "—"))
+                cards.append(
+                    '<article class="winner-card">'
+                    '<div class="winner-card-head">'
+                    f'<span class="winner-card-title">#{row_number} · {html.escape(str(record.get("Symbol", "Unknown")))}</span>'
+                    f'<span class="winner-card-pnl">{html.escape(pnl_value)}</span>'
+                    '</div>'
+                    '<div class="winner-section-label">IDENTIFICATION</div>'
+                    f'<div class="winner-fields">{identity_html}</div>'
+                    '<div class="winner-section-label">SIGNAL & MARKET QUALITY</div>'
+                    f'<div class="winner-fields">{signal_html}</div>'
+                    '<div class="winner-section-label">CLOSED OUTCOME</div>'
+                    f'<div class="winner-fields">{outcome_html}</div>'
+                    '</article>'
+                )
+            st.markdown('<div class="winner-ledger">' + "".join(cards) + '</div>', unsafe_allow_html=True)
+
             liquidity_count = int((winner_view["24h quote liquidity (USDT)"] != "Not captured").sum())
             st.caption(
                 f"{len(winner_view)} closed winning alert records · {liquidity_count}/{len(winner_view)} with 24h quote liquidity "
-                "from a linked outcome or same-symbol R2 quality snapshot within 3 minutes. "
+                "from a linked outcome or stage-specific same-symbol R2 quality snapshot within 3 minutes. "
                 "No symbol-only joins; unavailable source values remain explicitly marked."
             )
         else:
