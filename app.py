@@ -44,7 +44,7 @@ div[data-testid="stExpander"]{border:1px solid var(--line);border-radius:12px;ba
 
 st.markdown('<div class="pingr-eyebrow">Market intelligence workspace</div>', unsafe_allow_html=True)
 st.markdown('<h1 class="pingr-title">PINGR <span>ANALYTICS</span></h1>', unsafe_allow_html=True)
-st.markdown('<div class="pingr-subtitle">Live GitHub archive · Trading intelligence · Detector performance · Historical patterns</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
+st.markdown('<div class="pingr-subtitle">Live Cloudflare R2 archive · Trading intelligence · Detector performance · Historical patterns</div><div class="pingr-rule"></div>', unsafe_allow_html=True)
 
 
 class ArchiveUpload(BytesIO):
@@ -52,89 +52,66 @@ class ArchiveUpload(BytesIO):
         super().__init__(content)
         self.name = name
 
-# Read the private archive branch directly from GitHub.
-GITHUB_OWNER = "rajnet70"
-GITHUB_REPO = "Binance-discord-alert"
-GITHUB_BRANCH = "pingr-log-archive"
-GITHUB_API = f"https://api.github.com/repos/{GITHUB_OWNER}/{GITHUB_REPO}"
-
-def github_headers():
-    token = st.secrets.get("GITHUB_TOKEN")
-    if not token:
-        github_section = st.secrets.get("github", {})
-        token = github_section.get("token") if hasattr(github_section, "get") else None
-    if not token:
-        raise RuntimeError(
-            "GitHub read token is not configured in Streamlit Secrets. "
-            "Add GITHUB_TOKEN there (read-only Contents access to the private archive repository)."
-        )
-    return {
-        "Authorization": f"Bearer {token}",
-        "Accept": "application/vnd.github+json",
-        "X-GitHub-Api-Version": "2022-11-28"
-    }
+# Read the live archive directly from Cloudflare R2 through the read-only Worker API.
+# The Worker decompresses .gz objects and returns JSONL; Streamlit does not need
+# R2 or GitHub credentials.
+R2_WORKER_URL = "https://binance-discord-alert.alisraja.workers.dev"
+R2_INDEX_URL = f"{R2_WORKER_URL}/dashboard/index"
+R2_FILE_URL = f"{R2_WORKER_URL}/dashboard/file"
 
 @st.cache_data(ttl=60, show_spinner=False)
-def github_archive_index():
-    # Use the branch's recursive Git tree instead of Contents directory listing.
-    # The Contents endpoint does not provide reliable page traversal for this use.
-    headers = github_headers()
-    branch_response = requests.get(
-        f"{GITHUB_API}/branches/{GITHUB_BRANCH}",
-        headers=headers,
-        timeout=30
-    )
-    branch_response.raise_for_status()
-    branch_data = branch_response.json()
-    tree_sha = branch_data["commit"]["commit"]["tree"]["sha"]
+def r2_archive_index():
+    objects = []
+    cursor = None
+    seen_cursors = set()
+    last_run = None
+    while True:
+        params = {"cursor": cursor} if cursor else {}
+        response = requests.get(R2_INDEX_URL, params=params, timeout=(15, 60))
+        response.raise_for_status()
+        payload = response.json()
+        if not payload.get("ok", False):
+            raise RuntimeError(f"R2 index returned an error: {payload}")
+        objects.extend(payload.get("objects", []))
+        if last_run is None:
+            last_run = payload.get("last_run")
+        next_cursor = payload.get("cursor")
+        if not next_cursor:
+            break
+        if next_cursor in seen_cursors:
+            raise RuntimeError("R2 index pagination returned a repeated cursor; stopping to avoid an infinite loop.")
+        seen_cursors.add(next_cursor)
+        cursor = next_cursor
 
-    tree_response = requests.get(
-        f"{GITHUB_API}/git/trees/{tree_sha}",
-        params={"recursive": "1"},
-        headers=headers,
-        timeout=60
-    )
-    tree_response.raise_for_status()
-    tree_data = tree_response.json()
-    if tree_data.get("truncated"):
-        raise RuntimeError("GitHub returned a truncated archive tree; refusing to load an incomplete archive.")
-
-    return [
+    archives = [
         {
-            "name": item["path"].rsplit("/", 1)[-1],
-            "path": item["path"],
-            "sha": item["sha"],
-            "size": item.get("size", 0)
+            "key": item["key"],
+            "name": item["key"].rsplit("/", 1)[-1],
+            "size": item.get("size", 0),
+            "uploaded": item.get("uploaded")
         }
-        for item in tree_data.get("tree", [])
-        if item.get("type") == "blob"
-        and "/" not in item.get("path", "")
-        and item.get("path", "").startswith("pingr-archive__")
-        and not item.get("path", "").endswith(".sync.json")
+        for item in objects
+        if item.get("key", "").lower().endswith(".gz")
     ]
+    archives.sort(key=lambda item: (item.get("uploaded") or "", item["key"]))
+    return archives, last_run
 
-@st.cache_data(ttl=3600, max_entries=1000, show_spinner=False)
-def github_archive_file(path, sha):
+@st.cache_data(ttl=3600, max_entries=1500, show_spinner=False)
+def r2_archive_file(key, size, uploaded):
     response = requests.get(
-        f"{GITHUB_API}/contents/{requests.utils.quote(path, safe='/')}",
-        params={"ref": GITHUB_BRANCH},
-        headers=github_headers(),
-        timeout=(15, 120)
+        R2_FILE_URL,
+        params={"key": key},
+        timeout=(15, 180)
     )
     response.raise_for_status()
-    payload = response.json()
-    if payload.get("sha") != sha:
-        raise RuntimeError(f"Archive file changed while loading: {path}")
-    if payload.get("encoding") != "base64":
-        raise RuntimeError(f"Unexpected GitHub content encoding for {path}")
-    return base64.b64decode(payload["content"])
+    return response.content
 
 def load_archive():
-    objects = github_archive_index()
+    objects, last_run = r2_archive_index()
     loaded, errors = [], []
     with ThreadPoolExecutor(max_workers=8) as pool:
         jobs = {
-            pool.submit(github_archive_file, item["path"], item["sha"]): item
+            pool.submit(r2_archive_file, item["key"], item["size"], item.get("uploaded")): item
             for item in objects
         }
         for job in as_completed(jobs):
@@ -142,40 +119,43 @@ def load_archive():
             try:
                 content = job.result()
                 if content:
-                    name = item["name"].replace("pingr-archive__", "", 1)
-                    loaded.append((name, content))
+                    loaded.append((item["name"], content))
             except Exception as exc:
-                errors.append(f'{item["path"]}: {type(exc).__name__}: {exc}')
+                errors.append(f'{item["key"]}: {type(exc).__name__}: {exc}')
 
-    loaded.sort(key=lambda x: x[0])
-    latest = max((item["name"] for item in objects), default="Not available")
+    loaded.sort(key=lambda item: item[0])
+    latest = max((item.get("uploaded") or item["name"] for item in objects), default="Not available")
     return loaded, {
         "files": len(objects),
         "loaded": len(loaded),
         "errors": errors,
         "updated": latest,
-        "last_sync": None,
+        "last_sync": last_run,
+        "objects": objects
     }
 
-st.sidebar.header("Live GitHub archive")
-st.sidebar.caption("Source: rajnet70/Binance-discord-alert · branch: pingr-log-archive")
+st.sidebar.header("Live Cloudflare R2 archive")
+st.sidebar.caption("Source: Cloudflare R2 · bucket: pingr · prefix: pingr/logs/")
 if st.sidebar.button("Refresh archive now", use_container_width=True):
     st.cache_data.clear()
 try:
-    with st.spinner("Reading Pingr logs from the private GitHub archive…"):
+    with st.spinner("Reading Pingr snapshots directly from Cloudflare R2…"):
         archive_files, archive_status = load_archive()
 except Exception as exc:
-    st.error(f"Could not read the GitHub archive: {type(exc).__name__}: {exc}")
+    st.error(f"Could not read the Cloudflare R2 archive: {type(exc).__name__}: {exc}")
+    st.info("Check that the deployed archive Worker exposes /dashboard/index and /dashboard/file.")
     st.stop()
 uploads = [ArchiveUpload(name, content) for name, content in archive_files]
-st.sidebar.metric("Archive files loaded", f'{archive_status["loaded"]:,}')
-st.sidebar.caption(f'Latest GitHub archive file: {archive_status["updated"]}')
+st.sidebar.metric("R2 objects loaded", f'{archive_status["loaded"]:,}')
+st.sidebar.caption(f'Latest R2 object: {archive_status["updated"]}')
+if archive_status["last_sync"]:
+    st.sidebar.caption(f'Last GitHub mirror sync: {archive_status["last_sync"].get("completedAt", "status available")}')
 if archive_status["errors"]:
-    with st.sidebar.expander(f'{len(archive_status["errors"])} archive file(s) could not be read'):
+    with st.sidebar.expander(f'{len(archive_status["errors"])} R2 object(s) could not be read'):
         st.write(archive_status["errors"])
 else:
-    st.sidebar.success("GitHub archive read completed without file errors.")
-st.sidebar.caption("GitHub archive index refresh: 60 seconds. Archive files are cached by file SHA.")
+    st.sidebar.success("R2 archive read completed without file errors.")
+st.sidebar.caption("R2 index refresh: 60 seconds. Individual objects cached by key, size and upload time.")
 
 def parse_files(files):
     per_file, errors = {}, []
@@ -598,16 +578,16 @@ if not latest_eval.empty:
 else:
     st.info("No usable alert_outcome records with alert IDs are present in the archive yet.")
 
-# 5. Latest archive log — explicit latest file metadata and useful activity, not raw telemetry.
+# 5. Latest R2 log — explicit latest file metadata and useful activity, not raw telemetry.
 st.header("Latest log file")
 if latest_name:
-    st.markdown(f"**Newest file currently present in GitHub archive:** {latest_name}")
+    st.markdown(f"**Newest file currently present in Cloudflare R2:** {latest_name}")
     if pd.notna(latest_time):
         archive_age_hours = (pd.Timestamp.now(tz="UTC") - latest_time).total_seconds() / 3600
         if archive_age_hours > 12:
-            st.error(f"ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
+            st.error(f"R2 ARCHIVE IS STALE · Newest archived event is {archive_age_hours:.1f} hours old. This is not proof that Pingr is currently logging or syncing.")
         else:
-            st.success(f"Archive freshness: newest event is {archive_age_hours:.1f} hours old.")
+            st.success(f"R2 freshness: newest event is {archive_age_hours:.1f} hours old.")
     file_event_counts = latest_df.get("event_type", pd.Series(dtype="object")).fillna("unknown").value_counts()
     file_records = len(latest_rows)
     metric_row([
