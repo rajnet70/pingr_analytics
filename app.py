@@ -1000,6 +1000,7 @@ if active_page == "Overview":
             ("◎", "Decisive Win Rate", f"{decisive_rate:.1f}%" if pd.notna(decisive_rate) else "—", "green"),
             ("↗", "Winners", f"{wins:,}", "green"),
             ("↘", "Losers", f"{losses:,}", "red"),
+            ("＝", "Breakeven", f"{neutral:,}", "cyan"),
         ]
         kpi_html = "".join(
             f'<div class="kpi-card {tone}"><div class="kpi-icon">{icon}</div><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>'
@@ -1716,7 +1717,7 @@ if active_page == "Detector performance":
         show["win_rate"] = show["win_rate"].map(lambda x: f"{x:.1f}%")
         show["avg_return"] = show["avg_return"].map(lambda x: f"{x:+.2f}%")
         show["median_return"] = show["median_return"].map(lambda x: f"{x:+.2f}%")
-        show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
+        show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Breakeven", "Decisive win rate", "Avg return", "Median return"]
         st.dataframe(show, use_container_width=True, hide_index=True)
         chart = perf_all.sort_values("avg_return", ascending=True)
         fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
@@ -1752,7 +1753,7 @@ if active_page == "Coin intelligence":
         coin_rank = coin_rank.sort_values(["avg_return", "alerts"], ascending=[False, False])
         display = coin_rank.rename(columns={
             "symbol": "Coin", "alerts": "Alerts", "wins": "Wins", "losses": "Losses",
-            "neutral": "Neutral", "win_rate": "Decisive win rate",
+            "neutral": "Breakeven", "win_rate": "Decisive win rate",
             "avg_return": "Average return", "median_return": "Median return"
         }).copy()
         display["Decisive win rate"] = display["Decisive win rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
