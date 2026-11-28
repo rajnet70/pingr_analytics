@@ -1050,6 +1050,64 @@ if active_page == "Overview":
                 },
             )
 
+                        # Full record is available on demand; preserve every source-derived field.
+            winner_choices = list(range(len(winner_view)))
+            selected_rank = st.selectbox(
+                "Select a winner to inspect complete details",
+                options=winner_choices,
+                format_func=lambda i: (
+                    f"#{i + 1} · {winner_view.iloc[i]['Symbol']} · "
+                    f"{winner_view.iloc[i]['Final P&L']}"
+                ),
+                key="winner_detail_selection",
+            )
+            selected = winner_view.iloc[selected_rank]
+
+            st.markdown(f"#### Winner #{selected_rank + 1} · {selected['Symbol']}")
+            st.caption("Complete record · values are taken from the R2 alert and outcome archives. Missing source values are shown as Not captured.")
+
+            detail_fields = [
+                ("Alert time (PKT)", "Alert time (PKT)"),
+                ("Symbol", "Symbol"),
+                ("Signal / detector", "Signal"),
+                ("Signal score", "Score"),
+                ("5m volume ratio", "5m volume ratio"),
+                ("15m volume ratio", "15m volume ratio"),
+                ("5m price change", "5m price change"),
+                ("15m price change", "15m price change"),
+                ("15m RSI", "15m RSI"),
+                ("24h quote liquidity (USDT)", "24h quote liquidity (USDT)"),
+                ("Peak move", "Peak move"),
+                ("Worst move", "Worst move"),
+                ("Final P&L", "Final P&L"),
+                ("Minutes held", "Minutes held"),
+                ("Exit reason", "Exit reason"),
+            ]
+            detail_table = pd.DataFrame(
+                [
+                    {
+                        "Field": label,
+                        "Value": (
+                            "Not captured"
+                            if pd.isna(selected.get(column))
+                            or str(selected.get(column)).strip() in ("", "—")
+                            else str(selected.get(column))
+                        ),
+                    }
+                    for label, column in detail_fields
+                ]
+            )
+            st.dataframe(
+                detail_table,
+                use_container_width=True,
+                hide_index=True,
+                height= min(38 * (len(detail_table) + 1) + 8, 620),
+                column_config={
+                    "Field": st.column_config.TextColumn("Field", width="medium"),
+                    "Value": st.column_config.TextColumn("Value", width="large"),
+                },
+            )
+
             liquidity_count = int((winner_view["24h quote liquidity (USDT)"] != "Not captured").sum())
             st.caption(
                 f"{len(winner_view)} closed winning alert records · {liquidity_count}/{len(winner_view)} with 24h quote liquidity "
