@@ -1,6 +1,6 @@
 # Pingr Analytics Dashboard
 
-Interactive Streamlit dashboard reading Pingr log archives directly from the private GitHub archive branch.
+Interactive Streamlit dashboard reading Pingr log archives directly from Cloudflare R2 through the read-only archive Worker API.
 
 ## Streamlit Community Cloud
 
@@ -8,16 +8,21 @@ Interactive Streamlit dashboard reading Pingr log archives directly from the pri
 - Branch: `main`
 - Main file: `app.py`
 
-## Required Streamlit Secret
+## Data source
 
-The dashboard reads files from the private repository `rajnet70/Binance-discord-alert`, branch `pingr-log-archive`.
+The dashboard reads the paginated archive index from:
 
-Add a GitHub token as a Streamlit Community Cloud app secret (not as an in-app prompt):
+- `/dashboard/index`
+- `/dashboard/file`
 
-```toml
-GITHUB_TOKEN = "github_pat_..."
-```
+It retrieves compressed JSONL archives from the existing date-based folders under `pingr/logs/` in Cloudflare R2. All available date folders are included; the dashboard does not restrict ingestion to the current date.
 
-Use a fine-grained token with **Contents: Read-only** access to `rajnet70/Binance-discord-alert`. The token is used only by the Streamlit server to read the archive. It is not displayed in the dashboard or sent to visitors.
+The Worker decompresses each `.gz` object and returns JSONL. The dashboard uses the Worker read-only endpoints and does not write to R2.
 
-The app refreshes the GitHub archive index every 60 seconds and caches individual archive files by Git blob SHA.
+No GitHub archive token or GitHub archive branch is used as a dashboard data source.
+
+## Refresh
+
+- Archive index cache: 60 seconds
+- Automatic dashboard refresh: every 2 hours
+- Manual refresh: available in the dashboard
