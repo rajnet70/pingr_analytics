@@ -143,8 +143,9 @@ R2_FILE_URL = f"{R2_WORKER_URL}/dashboard/file"
 
 @st.cache_data(ttl=60, show_spinner=False)
 def r2_archive_index():
-    # R2 stores archives in date-based folders. Read every date partition
-    # returned by the paginated R2 index; do not limit ingestion to today.
+    # R2 stores archives in date-based folders. The dashboard analysis window
+    # starts on 27 November 2026 and includes every later dated folder.
+    archive_start_date = datetime(2026, 11, 27).date()
     objects = []
     cursor = None
     seen_cursors = set()
@@ -167,18 +168,28 @@ def r2_archive_index():
         seen_cursors.add(next_cursor)
         cursor = next_cursor
 
-    # Include compressed JSONL archives across all date-based folders in R2.
-    archives = [
-        {
+    # Include compressed JSONL archives from 27 Nov 2026 onwards.
+    # Expected R2 key layout: pingr/logs/YYYY/MM/DD/<archive>.gz
+    archives = []
+    for item in objects:
+        key = item.get("key", "").lstrip("/")
+        if not key.lower().endswith(".gz") or not key.startswith("pingr/logs/"):
+            continue
+        parts = key.split("/")
+        if len(parts) < 5:
+            continue
+        try:
+            folder_date = datetime.strptime("/".join(parts[2:5]), "%Y/%m/%d").date()
+        except ValueError:
+            continue
+        if folder_date < archive_start_date:
+            continue
+        archives.append({
             "key": item["key"],
-            "name": item["key"].rsplit("/", 1)[-1],
+            "name": key.rsplit("/", 1)[-1],
             "size": item.get("size", 0),
             "uploaded": item.get("uploaded")
-        }
-        for item in objects
-        if item.get("key", "").lower().endswith(".gz")
-        and item.get("key", "").lstrip("/").startswith("pingr/logs/")
-    ]
+        })
     archives.sort(key=lambda item: (item.get("uploaded") or "", item["key"]))
     return archives, last_run
 
@@ -264,8 +275,8 @@ with control_left:
 with control_right:
     st.markdown(
         f'<div style="padding:10px 14px;border:1px solid rgba(66,184,244,.18);border-radius:11px;background:rgba(8,24,40,.72);color:#a9c5da;font-size:.82rem">'
-        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; All dated archive folders'
-        f' &nbsp;·&nbsp; Auto-refresh every 2 hours &nbsp;·&nbsp; Source: pingr/logs/</div>',
+        f'<strong style="color:#72cefa">CLOUDFLARE R2</strong> &nbsp;·&nbsp; Archive folders from 27 Nov 2026'
+        f' &nbsp;·&nbsp; Auto-refresh every 2 hours &nbsp;·&nbsp; Source: pingr/logs/ · Start: 27 Nov 2026</div>',
         unsafe_allow_html=True
     )
 try:
