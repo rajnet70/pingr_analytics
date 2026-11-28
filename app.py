@@ -208,62 +208,66 @@ def load_archive():
         "objects": objects
     }
 
-def parse_r2_archives(objects):
-    per_file = {}
-    all_records = []
-    errors = []
-    seen_global = set()
-    duplicate_count = 0
-    loaded_count = 0
-    latest_name = None
-    latest_rows = []
+@st.cache_data(show_spinner=False)
+def load_one_r2_archive(key, uploaded, size, etag):
+    """Fetch and parse one immutable R2 object; cache by its identity/metadata.
 
-    for item in objects:
-        rows = []
-        try:
-            response = requests.get(
-                R2_FILE_URL,
-                params={"key": item["key"]},
-                timeout=(15, 180),
-                stream=True
-            )
-            response.raise_for_status()
-            # Worker response is JSONL. Iterate lines from the response body,
-            # parse each record, then release the response before next object.
-            for line_no, raw_line in enumerate(response.iter_lines(), 1):
-                if not raw_line:
-                    continue
-                try:
-                    obj = json.loads(raw_line.decode("utf-8-sig", errors="replace"))
-                    if not isinstance(obj, dict):
-                        raise ValueError("JSON line is not an object")
-                    fingerprint = hashlib.sha256(
-                        json.dumps(obj, sort_keys=True, separators=(",", ":"), default=str).encode()
-                    ).hexdigest()
-                    if fingerprint in seen_global:
-                        duplicate_count += 1
-                        continue
-                    seen_global.add(fingerprint)
-                    record = dict(obj)
-                    record["_source_file"] = item["name"]
-                    record["_line"] = line_no
-                    all_records.append(record)
-                    rows.append(record)
-                except Exception as exc:
-                    errors.append({"file": item["name"], "line": line_no, "error": str(exc)})
-            response.close()
-            loaded_count += 1
-            latest_name = item["name"]
-            latest_rows = rows
-        except Exception as exc:
-            errors.append({"file": item["name"], "line": 0, "error": f"{type(exc).__name__}: {exc}"})
+    Cache is process-local to Streamlit. A runtime restart causes a safe full
+    re-read; no external checkpoint store or write-capable service is assumed.
+    """
+    response = requests.get(
+        R2_FILE_URL, params={"key": key}, timeout=(15, 180), stream=True
+    )
+    response.raise_for_status()
+    rows, errors = [], []
+    try:
+        for line_no, raw_line in enumerate(response.iter_lines(), 1):
+            if not raw_line:
+                continue
             try:
-                response.close()
-            except Exception:
-                pass
+                obj = json.loads(raw_line.decode("utf-8-sig", errors="replace"))
+                if not isinstance(obj, dict):
+                    raise ValueError("JSON line is not an object")
+                record = dict(obj)
+                record["_source_file"] = key.rsplit("/", 1)[-1]
+                record["_source_key"] = key
+                record["_line"] = line_no
+                rows.append(record)
+            except Exception as exc:
+                errors.append({"file": key, "line": line_no, "error": str(exc)})
+    finally:
+        response.close()
+    return rows, errors
 
-    if latest_name is not None:
-        per_file[latest_name] = latest_rows
+
+def parse_r2_archives(objects):
+    """Incrementally reuse cached parse results for unchanged R2 objects."""
+    per_file, all_records, errors = {}, [], []
+    seen_global = set()
+    duplicate_count = loaded_count = 0
+    for item in objects:
+        key = item["key"]
+        rows, file_errors = load_one_r2_archive(
+            key,
+            str(item.get("uploaded") or ""),
+            int(item.get("size") or 0),
+            str(item.get("etag") or item.get("ETag") or ""),
+        )
+        errors.extend(file_errors)
+        loaded_count += 1
+        per_file[item.get("name") or key.rsplit("/", 1)[-1]] = rows
+        for record in rows:
+            fingerprint = hashlib.sha256(
+                json.dumps(
+                    {k: v for k, v in record.items() if not k.startswith("_source_") and k != "_line"},
+                    sort_keys=True, separators=(",", ":"), default=str
+                ).encode()
+            ).hexdigest()
+            if fingerprint in seen_global:
+                duplicate_count += 1
+                continue
+            seen_global.add(fingerprint)
+            all_records.append(record)
     return per_file, all_records, errors, duplicate_count, loaded_count
 
 today_label = datetime.now(ZoneInfo("Asia/Karachi")).strftime("%d %b %Y")
@@ -369,16 +373,15 @@ def detector_summary(alerts):
     a = a.dropna(subset=["final_percent"])
     if a.empty:
         return pd.DataFrame()
-    # Consistent descriptive outcome bands used by the upgraded dashboard:
-    # win >= +1%, loss <= -0.5%, neutral between those thresholds.
-    a["outcome_class"] = "neutral"
-    a.loc[a["final_percent"] >= 1.0, "outcome_class"] = "win"
-    a.loc[a["final_percent"] <= -0.5, "outcome_class"] = "loss"
+    # Classify from the actual final closed-trade P&L; no arbitrary threshold.
+    a["outcome_class"] = "breakeven"
+    a.loc[a["final_percent"] > 0, "outcome_class"] = "win"
+    a.loc[a["final_percent"] < 0, "outcome_class"] = "loss"
     out = a.groupby("detector", dropna=False).agg(
         alerts=("final_percent", "size"),
         wins=("outcome_class", lambda x: int((x == "win").sum())),
         losses=("outcome_class", lambda x: int((x == "loss").sum())),
-        neutral=("outcome_class", lambda x: int((x == "neutral").sum())),
+        neutral=("outcome_class", lambda x: int((x == "breakeven").sum())),
         avg_return=("final_percent", "mean"),
         median_return=("final_percent", "median"),
         avg_peak=("peak_percent", "mean") if "peak_percent" in a.columns else ("final_percent", "mean"),
@@ -395,7 +398,9 @@ def latest_outcomes(outcomes):
     out = outcomes.copy()
     if "timestamp" in out:
         out["_parsed_timestamp"] = pd.to_datetime(out["timestamp"], errors="coerce", utc=True)
-        out = out.sort_values("_parsed_timestamp")
+        # Stable ordering: timestamped evaluations outrank missing timestamps;
+        # within equal timestamps, preserve archive order and keep the last row.
+        out = out.sort_values("_parsed_timestamp", kind="mergesort", na_position="first")
     out = out.dropna(subset=["alert_id"]).drop_duplicates(subset=["alert_id"], keep="last")
     return out.drop(columns=["_parsed_timestamp"], errors="ignore")
 
@@ -728,9 +733,9 @@ outcome_results = overview_outcomes.get("result", pd.Series(dtype="object")).ast
 classified_outcomes = overview_outcomes[outcome_results.isin(["win", "loss", "neutral"])].copy()
 closed_count = len(valid)
 tracker_returns = pd.to_numeric(valid.get("final_percent", pd.Series(dtype="float64")), errors="coerce")
-wins = int((tracker_returns >= 1.0).sum())
-losses = int((tracker_returns <= -0.5).sum())
-neutral = max(0, closed_count - wins - losses)
+wins = int((tracker_returns > 0).sum())
+losses = int((tracker_returns < 0).sum())
+neutral = int((tracker_returns == 0).sum())
 decisive = wins + losses
 win_rate = wins / closed_count * 100 if closed_count else float("nan")
 decisive_rate = wins / decisive * 100 if decisive else float("nan")
@@ -758,13 +763,19 @@ if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcom
     for field in numeric_fields:
         if field in overview_outcomes:
             overview_outcomes[field] = pd.to_numeric(overview_outcomes[field], errors="coerce")
-    liquidity_fields = [
-        col for col in overview_outcomes.columns
-        if any(token in col.lower() for token in ("liquidity", "quote_volume", "turnover_24h", "volume_24h"))
-        and pd.api.types.is_numeric_dtype(overview_outcomes[col])
+    # Only fields whose names explicitly identify quote-currency liquidity are
+    # eligible. Generic base-volume/turnover/liquidity fields are not assumed to
+    # be USDT quote volume without schema and unit verification.
+    quote_liquidity_candidates = [
+        "diagnostic.volume_24h_quote_usdt", "volume_24h_quote_usdt",
+        "original_quote_volume_24h", "original_liquidity_usdt"
     ]
-    liquidity_field = next((col for col in liquidity_fields if "original" in col.lower()),
-                           liquidity_fields[0] if liquidity_fields else None)
+    liquidity_field = next(
+        (col for col in quote_liquidity_candidates
+         if col in overview_outcomes.columns
+         and pd.api.types.is_numeric_dtype(overview_outcomes[col])),
+        None
+    )
     indicator_fields = [
         ("original_score", "Signal score"),
         ("original_volume_5m", "5m volume ratio"),
@@ -784,7 +795,7 @@ if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcom
     if not classified.empty:
         classified["symbol"] = classified["symbol"].fillna("Unknown").astype(str)
         summary_rows = []
-        for result_name, display_name in [("win", "Winners"), ("loss", "Losers"), ("neutral", "Neutral")]:
+        for result_name, display_name in [("win", "Winners"), ("loss", "Losers"), ("breakeven", "Breakeven")]:
             group = classified[classified["result"].eq(result_name)]
             row = {"Group": display_name, "Alerts": len(group)}
             if "pnl_percent" in group:
@@ -856,8 +867,8 @@ if closed_count and "symbol" in valid.columns:
     symbol_data = symbol_data.dropna(subset=["symbol", "final_percent"])
     symbol_rank = symbol_data.groupby("symbol").agg(
         signals=("final_percent", "size"),
-        wins=("final_percent", lambda x: int((x >= 1.0).sum())),
-        losses=("final_percent", lambda x: int((x <= -.5).sum())),
+        wins=("final_percent", lambda x: int((x > 0).sum())),
+        losses=("final_percent", lambda x: int((x < 0).sum())),
         median_pnl=("final_percent", "median"),
     ).reset_index()
     symbol_rank["avg_score"] = (
@@ -912,7 +923,7 @@ if active_page == "Overview":
             return result
 
         pattern_metrics = [
-            ("24h quote liquidity (USDT)", ["diagnostic.volume_24h_quote_usdt", "volume_24h_quote_usdt", "original_quote_volume_24h", "original_volume_24h", "original_turnover_24h"], "volume"),
+            ("24h quote liquidity (USDT)", ["diagnostic.volume_24h_quote_usdt", "volume_24h_quote_usdt", "original_quote_volume_24h", "original_liquidity_usdt"], "volume"),
             ("5m volume ratio", ["diagnostic.volume_spike_5m", "volume_spike_5m", "original_volume_5m"], "multiple"),
             ("15m volume ratio", ["diagnostic.volume_spike_15m", "volume_spike_15m", "original_volume_15m", "vol_ratio"], "multiple"),
             ("5m price change", ["diagnostic.price_change_5m_pct", "price_change_5m", "original_price_change_5m"], "percent"),
@@ -952,7 +963,7 @@ if active_page == "Overview":
         if not classified_outcomes.empty:
             st.markdown("#### Winner vs loser patterns")
             outcome_pattern_specs = [
-                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_volume_24h", "original_turnover_24h", "original_liquidity_usd", "original_liquidity"], "volume"),
+                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_liquidity_usdt"], "volume"),
                 ("5m volume ratio", ["original_volume_5m"], "multiple"),
                 ("5m price change", ["original_price_change_5m"], "percent"),
                 ("15m RSI", ["original_rsi_15m"], "number"),
@@ -995,6 +1006,7 @@ if active_page == "Overview":
             ("◎", "Decisive Win Rate", f"{decisive_rate:.1f}%" if pd.notna(decisive_rate) else "—", "green"),
             ("↗", "Winners", f"{wins:,}", "green"),
             ("↘", "Losers", f"{losses:,}", "red"),
+            ("＝", "Breakeven", f"{neutral:,}", "cyan"),
         ]
         kpi_html = "".join(
             f'<div class="kpi-card {tone}"><div class="kpi-icon">{icon}</div><div class="kpi-label">{label}</div><div class="kpi-value">{value}</div></div>'
@@ -1005,9 +1017,11 @@ if active_page == "Overview":
         # One row per closed tracker winner. Use alert_record for final P&L and
         # its original indicators; enrich from alert_outcome and nearby R2 quality
         # snapshots only when symbol AND event time establish a safe match.
-        st.markdown('<div class="panel-title">Winners · complete R2 signal and liquidity ledger</div>', unsafe_allow_html=True)
+        st.markdown('<div class="panel-title">Winners & Losers · complete R2 signal and liquidity ledger</div>', unsafe_allow_html=True)
         winner_returns = pd.to_numeric(valid.get("final_percent", pd.Series(dtype="float64")), errors="coerce")
-        winning_alerts = valid[winner_returns >= 1.0].copy() if not valid.empty else pd.DataFrame()
+        # Ledger includes every non-breakeven closed trade; positive/negative
+        # P&L is the complete classification rule.
+        winning_alerts = valid[winner_returns != 0].copy() if not valid.empty else pd.DataFrame()
 
         if not winning_alerts.empty:
             enriched = enrich_alert_records_with_outcomes(winning_alerts, outcomes)
@@ -1071,15 +1085,15 @@ if active_page == "Overview":
             # Winner-only aggregate pattern analysis, grouped by the recorded alert detector/type.
             # Uses the already verified winner set and the stage-specific R2 quality matches above.
             st.markdown("#### Winner patterns by alert type")
-            st.caption("Closed winners only (final P&L ≥ +1%). Alert type is the recorded detector. Each metric has its own captured sample count; unmatched or missing values are excluded, never inferred.")
+            st.caption("Winner-pattern analysis uses positive final P&L only. The consolidated ledger below includes all positive and negative closed trades; zero-P&L breakeven trades are counted separately.")
 
-            winner_pattern_frame = enriched.copy()
+            winner_pattern_frame = enriched[pd.to_numeric(enriched.get("final_percent"), errors="coerce") > 0].copy()
             winner_pattern_frame["_alert_type"] = winner_pattern_frame.get(
                 "detector", pd.Series("Unknown", index=winner_pattern_frame.index)
             ).fillna("Unknown").astype(str).replace("", "Unknown")
 
             winner_pattern_metrics = [
-                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_volume_24h", "original_turnover_24h", "volume_24h_quote_usdt", "quality_volume_24h"], "volume"),
+                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_liquidity_usdt", "volume_24h_quote_usdt", "quality_volume_24h"], "volume"),
                 ("5m volume ratio", ["original_volume_5m", "volume_spike_5m", "quality_volume_5m"], "multiple"),
                 ("15m volume ratio", ["original_volume_15m", "volume_spike_15m", "vol_ratio", "quality_volume_15m"], "multiple"),
                 ("5m price change", ["original_price_change_5m", "price_change_5m", "quality_price_5m"], "percent"),
@@ -1154,7 +1168,7 @@ if active_page == "Overview":
             price5 = first_numeric(enriched, ["original_price_change_5m", "price_change_5m", "quality_price_5m"])
             price15 = first_numeric(enriched, ["original_price_change_15m", "price_change_15m", "quality_price_15m"])
             rsi15 = first_numeric(enriched, ["rsi_15m", "rsi_14", "rsi", "original_rsi_15m", "quality_rsi_15m"])
-            liquidity = first_numeric(enriched, ["original_volume_24h", "original_quote_volume_24h", "original_turnover_24h", "volume_24h_quote_usdt", "quality_volume_24h"]).replace(0, float("nan"))
+            liquidity = first_numeric(enriched, ["original_quote_volume_24h", "original_liquidity_usdt", "volume_24h_quote_usdt", "quality_volume_24h"])
             pnl = first_numeric(enriched, ["final_percent"])
             peak = first_numeric(enriched, ["peak_percent"])
             worst = first_numeric(enriched, ["worst_percent"])
@@ -1348,7 +1362,7 @@ if active_page == "Overview":
     else:
         st.info("Performance intelligence will appear as closed alert records accumulate.")
 
-    st.caption("Win = final return ≥ +1%; loss = ≤ −0.5%; neutral = between those thresholds. Decisive win rate excludes neutral outcomes. Figures use current loaded R2 archive records.")
+    st.caption("Closed-trade classification uses actual final P&L: positive = win, negative = loss, exactly zero = breakeven. Decisive win rate excludes breakeven outcomes. Figures use the R2 archive records from 27 Nov 2026 onward.")
 if active_page == "Patterns":
     st.header("Pattern intelligence")
     st.caption("Explore what separates successful and unsuccessful signals. Use these findings to evaluate Pingr improvements; no scanner rules are changed here.")
@@ -1709,7 +1723,7 @@ if active_page == "Detector performance":
         show["win_rate"] = show["win_rate"].map(lambda x: f"{x:.1f}%")
         show["avg_return"] = show["avg_return"].map(lambda x: f"{x:+.2f}%")
         show["median_return"] = show["median_return"].map(lambda x: f"{x:+.2f}%")
-        show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Neutral", "Decisive win rate", "Avg return", "Median return"]
+        show.columns = ["Detector", "Closed alerts", "Wins", "Losses", "Breakeven", "Decisive win rate", "Avg return", "Median return"]
         st.dataframe(show, use_container_width=True, hide_index=True)
         chart = perf_all.sort_values("avg_return", ascending=True)
         fig = px.bar(chart, x="avg_return", y="detector", orientation="h",
@@ -1736,16 +1750,16 @@ if active_page == "Coin intelligence":
             alerts=("final_percent", "size"),
             avg_return=("final_percent", "mean"),
             median_return=("final_percent", "median"),
-            wins=("final_percent", lambda x: int((x >= 1.0).sum())),
-            losses=("final_percent", lambda x: int((x <= -0.5).sum())),
-            neutral=("final_percent", lambda x: int(((x > -0.5) & (x < 1.0)).sum())),
+            wins=("final_percent", lambda x: int((x > 0).sum())),
+            losses=("final_percent", lambda x: int((x < 0).sum())),
+            neutral=("final_percent", lambda x: int((x == 0).sum())),
         ).reset_index()
         decisive_by_coin = coin_rank["wins"] + coin_rank["losses"]
         coin_rank["win_rate"] = (coin_rank["wins"] / decisive_by_coin.replace(0, pd.NA) * 100)
         coin_rank = coin_rank.sort_values(["avg_return", "alerts"], ascending=[False, False])
         display = coin_rank.rename(columns={
             "symbol": "Coin", "alerts": "Alerts", "wins": "Wins", "losses": "Losses",
-            "neutral": "Neutral", "win_rate": "Decisive win rate",
+            "neutral": "Breakeven", "win_rate": "Decisive win rate",
             "avg_return": "Average return", "median_return": "Median return"
         }).copy()
         display["Decisive win rate"] = display["Decisive win rate"].map(lambda x: f"{x:.1f}%" if pd.notna(x) else "—")
