@@ -1028,59 +1028,27 @@ if active_page == "Overview":
             ]
             winner_view = winner_view[winner_columns]
 
-            # Mobile-first cards keep every winner in one section without a wide,
-            # horizontally scrollable dataframe. All values remain log-derived.
-            def winner_field(label, value):
-                value = "Not captured" if pd.isna(value) or str(value).strip() in ("", "—") else str(value)
-                missing = " missing" if value == "Not captured" else ""
-                return (
-                    '<div class="winner-field">'
-                    f'<span class="winner-field-label">{html.escape(str(label))}</span>'
-                    f'<span class="winner-field-value{missing}">{html.escape(value)}</span>'
-                    '</div>'
-                )
-
-            cards = []
-            for row_number, (_, record) in enumerate(winner_view.iterrows(), 1):
-                identity = [
-                    ("Alert time (PKT)", record.get("Alert time (PKT)", "—")),
-                    ("Signal", record.get("Signal", "—")),
-                    ("Score", record.get("Score", "—")),
-                ]
-                signal_fields = [
-                    ("5m volume ratio", record.get("5m volume ratio", "—")),
-                    ("15m volume ratio", record.get("15m volume ratio", "—")),
-                    ("5m price change", record.get("5m price change", "—")),
-                    ("15m price change", record.get("15m price change", "—")),
-                    ("15m RSI", record.get("15m RSI", "—")),
-                    ("24h quote liquidity (USDT)", record.get("24h quote liquidity (USDT)", "Not captured")),
-                ]
-                outcome_fields = [
-                    ("Peak move", record.get("Peak move", "—")),
-                    ("Worst move", record.get("Worst move", "—")),
-                    ("Final P&L", record.get("Final P&L", "—")),
-                    ("Minutes held", record.get("Minutes held", "—")),
-                    ("Exit reason", record.get("Exit reason", "—")),
-                ]
-                identity_html = "".join(winner_field(label, value) for label, value in identity)
-                signal_html = "".join(winner_field(label, value) for label, value in signal_fields)
-                outcome_html = "".join(winner_field(label, value) for label, value in outcome_fields)
-                pnl_value = str(record.get("Final P&L", "—"))
-                cards.append(
-                    '<article class="winner-card">'
-                    '<div class="winner-card-head">'
-                    f'<span class="winner-card-title">#{row_number} · {html.escape(str(record.get("Symbol", "Unknown")))}</span>'
-                    f'<span class="winner-card-pnl">{html.escape(pnl_value)}</span>'
-                    '</div>'
-                    '<div class="winner-section-label">IDENTIFICATION</div>'
-                    f'<div class="winner-fields">{identity_html}</div>'
-                    '<div class="winner-section-label">SIGNAL & MARKET QUALITY</div>'
-                    f'<div class="winner-fields">{signal_html}</div>'
-                    '<div class="winner-section-label">CLOSED OUTCOME</div>'
-                    f'<div class="winner-fields">{outcome_html}</div>'
-                    '</article>'
-                )
-            st.markdown('<div class="winner-ledger">' + "".join(cards) + '</div>', unsafe_allow_html=True)
+            # Stage 1: compact native Streamlit leaderboard. Keep the existing
+            # R2 parsing, matching, winner calculations and detail fields untouched.
+            leaderboard = winner_view[
+                ["Symbol", "Final P&L", "Peak move", "24h quote liquidity (USDT)"]
+            ].copy()
+            leaderboard.insert(0, "Rank", range(1, len(leaderboard) + 1))
+            st.dataframe(
+                leaderboard,
+                use_container_width=True,
+                hide_index=True,
+                height=min(42 * (len(leaderboard) + 1) + 8, 720),
+                column_config={
+                    "Rank": st.column_config.NumberColumn("Rank", format="%d", width="small"),
+                    "Symbol": st.column_config.TextColumn("Symbol", width="medium"),
+                    "Final P&L": st.column_config.TextColumn("Final P&L", width="small"),
+                    "Peak move": st.column_config.TextColumn("Peak move", width="small"),
+                    "24h quote liquidity (USDT)": st.column_config.TextColumn(
+                        "24h liquidity (USDT)", width="medium"
+                    ),
+                },
+            )
 
             liquidity_count = int((winner_view["24h quote liquidity (USDT)"] != "Not captured").sum())
             st.caption(
