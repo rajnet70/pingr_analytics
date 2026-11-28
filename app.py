@@ -1068,6 +1068,71 @@ if active_page == "Overview":
                     enriched.at[idx, "quality_rsi_15m"] = indicators.get("diagnostic.rsi_15m", pd.NA)
                     enriched.at[idx, "quality_indicator_match_status"] = "Matched indicator snapshot"
 
+            # Winner-only aggregate pattern analysis, grouped by the recorded alert detector/type.
+            # Uses the already verified winner set and the stage-specific R2 quality matches above.
+            st.markdown("#### Winner patterns by alert type")
+            st.caption("Closed winners only (final P&L ≥ +1%). Alert type is the recorded detector. Each metric has its own captured sample count; unmatched or missing values are excluded, never inferred.")
+
+            winner_pattern_frame = enriched.copy()
+            winner_pattern_frame["_alert_type"] = winner_pattern_frame.get(
+                "detector", pd.Series("Unknown", index=winner_pattern_frame.index)
+            ).fillna("Unknown").astype(str).replace("", "Unknown")
+
+            winner_pattern_metrics = [
+                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_volume_24h", "original_turnover_24h", "volume_24h_quote_usdt", "quality_volume_24h"], "volume"),
+                ("5m volume ratio", ["original_volume_5m", "volume_spike_5m", "quality_volume_5m"], "multiple"),
+                ("15m volume ratio", ["original_volume_15m", "volume_spike_15m", "vol_ratio", "quality_volume_15m"], "multiple"),
+                ("5m price change", ["original_price_change_5m", "price_change_5m", "quality_price_5m"], "percent"),
+                ("15m price change", ["original_price_change_15m", "price_change_15m", "quality_price_15m"], "percent"),
+                ("15m RSI", ["rsi_15m", "rsi_14", "rsi", "original_rsi_15m", "quality_rsi_15m"], "number"),
+                ("Signal score", ["signal_score", "score", "original_score"], "number"),
+            ]
+
+            def winner_pattern_values(frame, fields):
+                values = pd.Series(index=frame.index, dtype="float64")
+                for field in fields:
+                    if field in frame.columns:
+                        values = values.combine_first(pd.to_numeric(frame[field], errors="coerce"))
+                return values
+
+            pattern_table_rows = []
+            for alert_type, type_frame in winner_pattern_frame.groupby("_alert_type", dropna=False):
+                for metric_label, candidates, kind in winner_pattern_metrics:
+                    vals = winner_pattern_values(type_frame, candidates).dropna()
+                    if vals.empty:
+                        minimum = average = maximum = "Not captured"
+                    else:
+                        lo, avg, hi = vals.min(), vals.mean(), vals.max()
+                        if kind == "volume":
+                            fmt = lambda x: compact_volume(x) + " USDT"
+                        elif kind == "multiple":
+                            fmt = lambda x: f"{x:.2f}×"
+                        elif kind == "percent":
+                            fmt = lambda x: f"{x:+.2f}%"
+                        else:
+                            fmt = lambda x: f"{x:.2f}"
+                        minimum, average, maximum = fmt(lo), fmt(avg), fmt(hi)
+                    pattern_table_rows.append({
+                        "Alert type": str(alert_type),
+                        "Winner count": int(len(type_frame)),
+                        "Metric": metric_label,
+                        "Minimum": minimum,
+                        "Average": average,
+                        "Maximum": maximum,
+                        "Captured n": int(vals.size),
+                    })
+
+            if pattern_table_rows:
+                st.dataframe(
+                    pd.DataFrame(pattern_table_rows),
+                    use_container_width=True,
+                    hide_index=True,
+                    height=min(42 * (len(pattern_table_rows) + 1) + 8, 720),
+                )
+                st.caption("Volume fields are labelled as ratios where the R2 source records represent spike multiples. Absolute 5m/15m traded volume is not substituted from a ratio.")
+            else:
+                st.info("No winner records are available for alert-type pattern analysis.")
+
             def first_numeric(frame, fields):
                 values = pd.Series(index=frame.index, dtype="float64")
                 for field in fields:
