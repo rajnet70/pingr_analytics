@@ -763,13 +763,19 @@ if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcom
     for field in numeric_fields:
         if field in overview_outcomes:
             overview_outcomes[field] = pd.to_numeric(overview_outcomes[field], errors="coerce")
-    liquidity_fields = [
-        col for col in overview_outcomes.columns
-        if any(token in col.lower() for token in ("liquidity", "quote_volume", "turnover_24h", "volume_24h"))
-        and pd.api.types.is_numeric_dtype(overview_outcomes[col])
+    # Only fields whose names explicitly identify quote-currency liquidity are
+    # eligible. Generic base-volume/turnover/liquidity fields are not assumed to
+    # be USDT quote volume without schema and unit verification.
+    quote_liquidity_candidates = [
+        "diagnostic.volume_24h_quote_usdt", "volume_24h_quote_usdt",
+        "original_quote_volume_24h", "original_liquidity_usdt"
     ]
-    liquidity_field = next((col for col in liquidity_fields if "original" in col.lower()),
-                           liquidity_fields[0] if liquidity_fields else None)
+    liquidity_field = next(
+        (col for col in quote_liquidity_candidates
+         if col in overview_outcomes.columns
+         and pd.api.types.is_numeric_dtype(overview_outcomes[col])),
+        None
+    )
     indicator_fields = [
         ("original_score", "Signal score"),
         ("original_volume_5m", "5m volume ratio"),
@@ -917,7 +923,7 @@ if active_page == "Overview":
             return result
 
         pattern_metrics = [
-            ("24h quote liquidity (USDT)", ["diagnostic.volume_24h_quote_usdt", "volume_24h_quote_usdt", "original_quote_volume_24h", "original_volume_24h", "original_turnover_24h"], "volume"),
+            ("24h quote liquidity (USDT)", ["diagnostic.volume_24h_quote_usdt", "volume_24h_quote_usdt", "original_quote_volume_24h", "original_liquidity_usdt"], "volume"),
             ("5m volume ratio", ["diagnostic.volume_spike_5m", "volume_spike_5m", "original_volume_5m"], "multiple"),
             ("15m volume ratio", ["diagnostic.volume_spike_15m", "volume_spike_15m", "original_volume_15m", "vol_ratio"], "multiple"),
             ("5m price change", ["diagnostic.price_change_5m_pct", "price_change_5m", "original_price_change_5m"], "percent"),
@@ -957,7 +963,7 @@ if active_page == "Overview":
         if not classified_outcomes.empty:
             st.markdown("#### Winner vs loser patterns")
             outcome_pattern_specs = [
-                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_volume_24h", "original_turnover_24h", "original_liquidity_usd", "original_liquidity"], "volume"),
+                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_liquidity_usdt"], "volume"),
                 ("5m volume ratio", ["original_volume_5m"], "multiple"),
                 ("5m price change", ["original_price_change_5m"], "percent"),
                 ("15m RSI", ["original_rsi_15m"], "number"),
@@ -1087,7 +1093,7 @@ if active_page == "Overview":
             ).fillna("Unknown").astype(str).replace("", "Unknown")
 
             winner_pattern_metrics = [
-                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_volume_24h", "original_turnover_24h", "volume_24h_quote_usdt", "quality_volume_24h"], "volume"),
+                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_liquidity_usdt", "volume_24h_quote_usdt", "quality_volume_24h"], "volume"),
                 ("5m volume ratio", ["original_volume_5m", "volume_spike_5m", "quality_volume_5m"], "multiple"),
                 ("15m volume ratio", ["original_volume_15m", "volume_spike_15m", "vol_ratio", "quality_volume_15m"], "multiple"),
                 ("5m price change", ["original_price_change_5m", "price_change_5m", "quality_price_5m"], "percent"),
@@ -1162,7 +1168,7 @@ if active_page == "Overview":
             price5 = first_numeric(enriched, ["original_price_change_5m", "price_change_5m", "quality_price_5m"])
             price15 = first_numeric(enriched, ["original_price_change_15m", "price_change_15m", "quality_price_15m"])
             rsi15 = first_numeric(enriched, ["rsi_15m", "rsi_14", "rsi", "original_rsi_15m", "quality_rsi_15m"])
-            liquidity = first_numeric(enriched, ["original_volume_24h", "original_quote_volume_24h", "original_turnover_24h", "volume_24h_quote_usdt", "quality_volume_24h"]).replace(0, float("nan"))
+            liquidity = first_numeric(enriched, ["original_quote_volume_24h", "original_liquidity_usdt", "volume_24h_quote_usdt", "quality_volume_24h"])
             pnl = first_numeric(enriched, ["final_percent"])
             peak = first_numeric(enriched, ["peak_percent"])
             worst = first_numeric(enriched, ["worst_percent"])
