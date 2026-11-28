@@ -897,6 +897,98 @@ if active_page == "Overview":
             f'<span class="status-divider"></span><span class="archive-meta">{len(combined):,} events · {archive_status["loaded"]:,} R2 files</span></div>',
             unsafe_allow_html=True
         )
+        # Aggregate market-pattern intelligence across the complete R2 event set.
+        # Prefer diagnostic snapshots for market conditions; outcomes are analysed
+        # separately below so repeated evaluations are not mixed into raw event averages.
+        st.markdown("### Market & Signal Patterns")
+        st.caption("Aggregate statistics from the available R2 archive events. Each metric reports its own captured sample count; repeated snapshots are not treated as unique closed trades.")
+
+        pattern_source = combined.copy()
+        def first_available_numeric(frame, candidates):
+            result = pd.Series(index=frame.index, dtype="float64")
+            for candidate in candidates:
+                if candidate in frame.columns:
+                    result = result.combine_first(pd.to_numeric(frame[candidate], errors="coerce"))
+            return result
+
+        pattern_metrics = [
+            ("24h quote liquidity (USDT)", ["diagnostic.volume_24h_quote_usdt", "volume_24h_quote_usdt", "original_quote_volume_24h", "original_volume_24h", "original_turnover_24h"], "volume"),
+            ("5m volume ratio", ["diagnostic.volume_spike_5m", "volume_spike_5m", "original_volume_5m"], "multiple"),
+            ("15m volume ratio", ["diagnostic.volume_spike_15m", "volume_spike_15m", "original_volume_15m", "vol_ratio"], "multiple"),
+            ("5m price change", ["diagnostic.price_change_5m_pct", "price_change_5m", "original_price_change_5m"], "percent"),
+            ("15m price change", ["diagnostic.price_change_15m_pct", "price_change_15m", "original_price_change_15m"], "percent"),
+            ("Signal score", ["signal_score", "score", "original_score"], "number"),
+            ("15m RSI", ["diagnostic.rsi_15m", "rsi_15m", "rsi_14", "original_rsi_15m"], "number"),
+        ]
+        def pattern_compact_volume(value):
+            value = float(value)
+            if abs(value) >= 1_000_000_000:
+                return f"{value / 1_000_000_000:.2f}B"
+            if abs(value) >= 1_000_000:
+                return f"{value / 1_000_000:.1f}M"
+            if abs(value) >= 1_000:
+                return f"{value / 1_000:.1f}K"
+            return f"{value:.0f}"
+
+        pattern_rows_all = []
+        for metric_label, candidates, kind in pattern_metrics:
+            values = first_available_numeric(pattern_source, candidates).dropna()
+            if values.empty:
+                pattern_rows_all.append({"Metric": metric_label, "Min": "Not captured", "Average": "Not captured", "Max": "Not captured", "Captured n": 0})
+                continue
+            lo, avg, hi = values.min(), values.mean(), values.max()
+            if kind == "volume":
+                fmt = lambda x: pattern_compact_volume(x) + " USDT"
+            elif kind == "multiple":
+                fmt = lambda x: f"{x:.2f}×"
+            elif kind == "percent":
+                fmt = lambda x: f"{x:+.2f}%"
+            else:
+                fmt = lambda x: f"{x:.2f}"
+            pattern_rows_all.append({"Metric": metric_label, "Min": fmt(lo), "Average": fmt(avg), "Max": fmt(hi), "Captured n": int(values.size)})
+        st.dataframe(pd.DataFrame(pattern_rows_all), use_container_width=True, hide_index=True)
+
+        # Outcome-linked pattern comparison: one latest outcome per alert ID.
+        if not classified_outcomes.empty:
+            st.markdown("#### Winner vs loser patterns")
+            outcome_pattern_specs = [
+                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_volume_24h", "original_turnover_24h", "original_liquidity_usd", "original_liquidity"], "volume"),
+                ("5m volume ratio", ["original_volume_5m"], "multiple"),
+                ("5m price change", ["original_price_change_5m"], "percent"),
+                ("15m RSI", ["original_rsi_15m"], "number"),
+                ("Signal score", ["original_score"], "number"),
+            ]
+            comparison_rows = []
+            for label, candidates, kind in outcome_pattern_specs:
+                field = next((c for c in candidates if c in classified_outcomes.columns), None)
+                if field is None:
+                    continue
+                row = {"Metric": label}
+                for result_name, prefix in [("win", "Winners"), ("loss", "Losers")]:
+                    vals = pd.to_numeric(classified_outcomes.loc[classified_outcomes["result"].astype(str).str.lower().eq(result_name), field], errors="coerce").dropna()
+                    if vals.empty:
+                        row[prefix + " avg"] = "Not captured"
+                        row[prefix + " n"] = 0
+                    else:
+                        value = vals.mean()
+                        if kind == "volume":
+                            shown = pattern_compact_volume(value) + " USDT"
+                        elif kind == "multiple":
+                            shown = f"{value:.2f}×"
+                        elif kind == "percent":
+                            shown = f"{value:+.2f}%"
+                        else:
+                            shown = f"{value:.2f}"
+                        row[prefix + " avg"] = shown
+                        row[prefix + " n"] = int(vals.size)
+                comparison_rows.append(row)
+            if comparison_rows:
+                st.dataframe(pd.DataFrame(comparison_rows), use_container_width=True, hide_index=True)
+            else:
+                st.info("No comparable outcome-linked market fields are available in this archive.")
+        else:
+            st.info("Winner-versus-loser patterns will appear when classified outcome records contain comparable measurements.")
+
         kpis = [
             ("◉", "Total Signals", f"{len(alerts):,}", "cyan"),
             ("🏆", "Win Rate", f"{win_rate:.1f}%" if pd.notna(win_rate) else "—", "green"),
@@ -987,13 +1079,13 @@ if active_page == "Overview":
             ).fillna("Unknown").astype(str).replace("", "Unknown")
 
             winner_pattern_metrics = [
-                ("24h quote liquidity (USDT)", ["quality_volume_24h"], "volume"),
-                ("5m volume ratio", ["quality_volume_5m"], "multiple"),
-                ("15m volume ratio", ["quality_volume_15m"], "multiple"),
-                ("5m price change", ["quality_price_5m"], "percent"),
-                ("15m price change", ["quality_price_15m"], "percent"),
-                ("15m RSI", ["quality_rsi_15m"], "number"),
-                ("Signal score", ["signal_score", "score"], "number"),
+                ("24h quote liquidity (USDT)", ["original_quote_volume_24h", "original_volume_24h", "original_turnover_24h", "volume_24h_quote_usdt", "quality_volume_24h"], "volume"),
+                ("5m volume ratio", ["original_volume_5m", "volume_spike_5m", "quality_volume_5m"], "multiple"),
+                ("15m volume ratio", ["original_volume_15m", "volume_spike_15m", "vol_ratio", "quality_volume_15m"], "multiple"),
+                ("5m price change", ["original_price_change_5m", "price_change_5m", "quality_price_5m"], "percent"),
+                ("15m price change", ["original_price_change_15m", "price_change_15m", "quality_price_15m"], "percent"),
+                ("15m RSI", ["rsi_15m", "rsi_14", "rsi", "original_rsi_15m", "quality_rsi_15m"], "number"),
+                ("Signal score", ["signal_score", "score", "original_score"], "number"),
             ]
 
             def winner_pattern_values(frame, fields):
@@ -1037,7 +1129,7 @@ if active_page == "Overview":
                     hide_index=True,
                     height=min(42 * (len(pattern_table_rows) + 1) + 8, 720),
                 )
-                st.caption("Market measurements come only from the unique, timestamp-matched R2 quality snapshots for each winner. Score and alert type come from the alert record. Absolute traded volume is not inferred from volume ratios.")
+                st.caption("Volume fields are labelled as ratios where the R2 source records represent spike multiples. Absolute 5m/15m traded volume is not substituted from a ratio.")
             else:
                 st.info("No winner records are available for alert-type pattern analysis.")
 
