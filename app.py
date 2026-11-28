@@ -920,6 +920,16 @@ if active_page == "Overview":
             ("Signal score", ["signal_score", "score", "original_score"], "number"),
             ("15m RSI", ["diagnostic.rsi_15m", "rsi_15m", "rsi_14", "original_rsi_15m"], "number"),
         ]
+        def pattern_pattern_compact_volume(value):
+            value = float(value)
+            if abs(value) >= 1_000_000_000:
+                return f"{value / 1_000_000_000:.2f}B"
+            if abs(value) >= 1_000_000:
+                return f"{value / 1_000_000:.1f}M"
+            if abs(value) >= 1_000:
+                return f"{value / 1_000:.1f}K"
+            return f"{value:.0f}"
+
         pattern_rows_all = []
         for metric_label, candidates, kind in pattern_metrics:
             values = first_available_numeric(pattern_source, candidates).dropna()
@@ -928,7 +938,7 @@ if active_page == "Overview":
                 continue
             lo, avg, hi = values.min(), values.mean(), values.max()
             if kind == "volume":
-                fmt = lambda x: compact_volume(x) + " USDT"
+                fmt = lambda x: pattern_compact_volume(x) + " USDT"
             elif kind == "multiple":
                 fmt = lambda x: f"{x:.2f}×"
             elif kind == "percent":
@@ -962,7 +972,7 @@ if active_page == "Overview":
                     else:
                         value = vals.mean()
                         if kind == "volume":
-                            shown = compact_volume(value) + " USDT"
+                            shown = pattern_compact_volume(value) + " USDT"
                         elif kind == "multiple":
                             shown = f"{value:.2f}×"
                         elif kind == "percent":
