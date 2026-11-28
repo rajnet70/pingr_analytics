@@ -920,7 +920,7 @@ if active_page == "Overview":
             ("Signal score", ["signal_score", "score", "original_score"], "number"),
             ("15m RSI", ["diagnostic.rsi_15m", "rsi_15m", "rsi_14", "original_rsi_15m"], "number"),
         ]
-        def pattern_pattern_compact_volume(value):
+        def pattern_compact_volume(value):
             value = float(value)
             if abs(value) >= 1_000_000_000:
                 return f"{value / 1_000_000_000:.2f}B"
