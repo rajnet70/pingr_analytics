@@ -789,7 +789,7 @@ if not overview_outcomes.empty and {"symbol", "result"}.issubset(overview_outcom
     if not classified.empty:
         classified["symbol"] = classified["symbol"].fillna("Unknown").astype(str)
         summary_rows = []
-        for result_name, display_name in [("win", "Winners"), ("loss", "Losers"), ("neutral", "Neutral")]:
+        for result_name, display_name in [("win", "Winners"), ("loss", "Losers"), ("breakeven", "Breakeven")]:
             group = classified[classified["result"].eq(result_name)]
             row = {"Group": display_name, "Alerts": len(group)}
             if "pnl_percent" in group:
@@ -1355,7 +1355,7 @@ if active_page == "Overview":
     else:
         st.info("Performance intelligence will appear as closed alert records accumulate.")
 
-    st.caption("Win = final return ≥ +1%; loss = ≤ −0.5%; neutral = between those thresholds. Decisive win rate excludes neutral outcomes. Figures use current loaded R2 archive records.")
+    st.caption("Closed-trade classification uses actual final P&L: positive = win, negative = loss, exactly zero = breakeven. Decisive win rate excludes breakeven outcomes. Figures use the R2 archive records from 27 Nov 2026 onward.")
 if active_page == "Patterns":
     st.header("Pattern intelligence")
     st.caption("Explore what separates successful and unsuccessful signals. Use these findings to evaluate Pingr improvements; no scanner rules are changed here.")
@@ -1743,9 +1743,9 @@ if active_page == "Coin intelligence":
             alerts=("final_percent", "size"),
             avg_return=("final_percent", "mean"),
             median_return=("final_percent", "median"),
-            wins=("final_percent", lambda x: int((x >= 1.0).sum())),
-            losses=("final_percent", lambda x: int((x <= -0.5).sum())),
-            neutral=("final_percent", lambda x: int(((x > -0.5) & (x < 1.0)).sum())),
+            wins=("final_percent", lambda x: int((x > 0).sum())),
+            losses=("final_percent", lambda x: int((x < 0).sum())),
+            neutral=("final_percent", lambda x: int((x == 0).sum())),
         ).reset_index()
         decisive_by_coin = coin_rank["wins"] + coin_rank["losses"]
         coin_rank["win_rate"] = (coin_rank["wins"] / decisive_by_coin.replace(0, pd.NA) * 100)
