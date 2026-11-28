@@ -125,6 +125,32 @@ hr{border-color:rgba(22,177,238,.16)!important}
 .winner-card-meta{color:#829db2;font-size:.66rem;margin-top:9px;overflow-wrap:anywhere}
 @media(max-width:560px){.winner-card{padding:10px}.winner-fields{grid-template-columns:repeat(2,minmax(0,1fr))}.winner-card-title{font-size:.9rem}.winner-field-value{font-size:.75rem}}
 
+
+/* Compact winner leaderboard with details-on-selection. */
+.winner-leaderboard{width:100%;border:1px solid rgba(22,177,238,.32);border-radius:11px;overflow:hidden;margin:8px 0 12px;background:rgba(3,15,28,.72)}
+.winner-rank-header,.winner-rank-row{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(76px,.7fr) minmax(76px,.7fr) minmax(100px,1fr);gap:9px;align-items:center;padding:9px 12px}
+.winner-rank-header{background:rgba(10,43,67,.9);color:#77dfff;font-size:.61rem;font-weight:900;letter-spacing:.08em}
+.winner-rank-row{border-top:1px solid rgba(22,177,238,.13);font-size:.78rem;color:#eaf5ff}
+.winner-rank-symbol{font-weight:800;overflow-wrap:anywhere}
+.winner-rank-pnl{color:#39e75f;font-weight:900}
+.winner-rank-peak{color:#c5d9e9}
+.winner-rank-liquidity{color:#a9c5da;overflow-wrap:anywhere}
+.winner-selected-detail{border:1px solid rgba(22,177,238,.36);border-radius:12px;padding:12px;margin:8px 0;background:linear-gradient(145deg,rgba(8,30,49,.96),rgba(3,14,27,.96))}
+.winner-selected-heading{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;font-weight:900;color:#f3f9ff;padding-bottom:10px;border-bottom:1px solid rgba(22,177,238,.22)}
+.winner-selected-heading span{color:#39e75f}
+.winner-detail-section{font-size:.62rem;letter-spacing:.12em;font-weight:900;color:#58d9ff;margin:11px 0 6px}
+.winner-detail-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}
+.winner-detail-field{min-width:0;border:1px solid rgba(22,177,238,.14);border-radius:8px;background:rgba(2,12,23,.55);padding:7px 8px}
+.winner-detail-label{display:block;color:#91abc0;font-size:.62rem;font-weight:800;margin-bottom:3px}
+.winner-detail-value{display:block;color:#f0f6fc;font-size:.79rem;font-weight:700;overflow-wrap:anywhere}
+.winner-detail-value.missing{color:#9bb0c1;font-weight:500}
+@media(max-width:560px){
+ .winner-rank-header,.winner-rank-row{grid-template-columns:minmax(0,1.25fr) minmax(65px,.75fr);gap:5px;padding:8px}
+ .winner-rank-header span:nth-child(3),.winner-rank-header span:nth-child(4),.winner-rank-peak,.winner-rank-liquidity{display:none}
+ .winner-rank-row{font-size:.76rem}
+ .winner-detail-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+
 </style>
 """, unsafe_allow_html=True)
 
@@ -1028,59 +1054,71 @@ if active_page == "Overview":
             ]
             winner_view = winner_view[winner_columns]
 
-            # Mobile-first cards keep every winner in one section without a wide,
-            # horizontally scrollable dataframe. All values remain log-derived.
+            # Compact leaderboard: keep all winners visible, show full detail for one selection.
             def winner_field(label, value):
                 value = "Not captured" if pd.isna(value) or str(value).strip() in ("", "—") else str(value)
                 missing = " missing" if value == "Not captured" else ""
                 return (
-                    '<div class="winner-field">'
-                    f'<span class="winner-field-label">{html.escape(str(label))}</span>'
-                    f'<span class="winner-field-value{missing}">{html.escape(value)}</span>'
+                    '<div class="winner-detail-field">'
+                    f'<span class="winner-detail-label">{html.escape(str(label))}</span>'
+                    f'<span class="winner-detail-value{missing}">{html.escape(value)}</span>'
                     '</div>'
                 )
 
-            cards = []
+            leaderboard_rows = []
             for row_number, (_, record) in enumerate(winner_view.iterrows(), 1):
-                identity = [
-                    ("Alert time (PKT)", record.get("Alert time (PKT)", "—")),
-                    ("Signal", record.get("Signal", "—")),
-                    ("Score", record.get("Score", "—")),
-                ]
-                signal_fields = [
-                    ("5m volume ratio", record.get("5m volume ratio", "—")),
-                    ("15m volume ratio", record.get("15m volume ratio", "—")),
-                    ("5m price change", record.get("5m price change", "—")),
-                    ("15m price change", record.get("15m price change", "—")),
-                    ("15m RSI", record.get("15m RSI", "—")),
-                    ("24h quote liquidity (USDT)", record.get("24h quote liquidity (USDT)", "Not captured")),
-                ]
-                outcome_fields = [
-                    ("Peak move", record.get("Peak move", "—")),
-                    ("Worst move", record.get("Worst move", "—")),
-                    ("Final P&L", record.get("Final P&L", "—")),
-                    ("Minutes held", record.get("Minutes held", "—")),
-                    ("Exit reason", record.get("Exit reason", "—")),
-                ]
-                identity_html = "".join(winner_field(label, value) for label, value in identity)
-                signal_html = "".join(winner_field(label, value) for label, value in signal_fields)
-                outcome_html = "".join(winner_field(label, value) for label, value in outcome_fields)
-                pnl_value = str(record.get("Final P&L", "—"))
-                cards.append(
-                    '<article class="winner-card">'
-                    '<div class="winner-card-head">'
-                    f'<span class="winner-card-title">#{row_number} · {html.escape(str(record.get("Symbol", "Unknown")))}</span>'
-                    f'<span class="winner-card-pnl">{html.escape(pnl_value)}</span>'
+                leaderboard_rows.append(
+                    '<div class="winner-rank-row">'
+                    f'<span class="winner-rank-symbol">#{row_number} · {html.escape(str(record.get("Symbol", "Unknown")))}</span>'
+                    f'<span class="winner-rank-pnl">{html.escape(str(record.get("Final P&L", "—")))}</span>'
+                    f'<span class="winner-rank-peak">{html.escape(str(record.get("Peak move", "—")))}</span>'
+                    f'<span class="winner-rank-liquidity">{html.escape(str(record.get("24h quote liquidity (USDT)", "Not captured")))}</span>'
                     '</div>'
-                    '<div class="winner-section-label">IDENTIFICATION</div>'
-                    f'<div class="winner-fields">{identity_html}</div>'
-                    '<div class="winner-section-label">SIGNAL & MARKET QUALITY</div>'
-                    f'<div class="winner-fields">{signal_html}</div>'
-                    '<div class="winner-section-label">CLOSED OUTCOME</div>'
-                    f'<div class="winner-fields">{outcome_html}</div>'
-                    '</article>'
                 )
-            st.markdown('<div class="winner-ledger">' + "".join(cards) + '</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="winner-leaderboard">'
+                '<div class="winner-rank-header"><span>WINNER / SYMBOL</span><span>FINAL P&L</span><span>PEAK MOVE</span><span>24H LIQUIDITY</span></div>'
+                + "".join(leaderboard_rows) + '</div>',
+                unsafe_allow_html=True
+            )
+
+            winner_options = [
+                f"#{i} · {record['Symbol']} · {record['Final P&L']}"
+                for i, (_, record) in enumerate(winner_view.iterrows(), 1)
+            ]
+            selected_winner = st.selectbox(
+                "View complete winner details",
+                options=list(range(len(winner_options))),
+                format_func=lambda i: winner_options[i],
+                key="pingr_selected_winner"
+            )
+            selected_record = winner_view.iloc[selected_winner]
+            detail_groups = [
+                ("IDENTIFICATION", ["Alert time (PKT)", "Symbol", "Signal", "Score"]),
+                ("SIGNAL & MARKET QUALITY", [
+                    "5m volume ratio", "15m volume ratio", "5m price change",
+                    "15m price change", "15m RSI", "24h quote liquidity (USDT)"
+                ]),
+                ("CLOSED OUTCOME", [
+                    "Peak move", "Worst move", "Final P&L", "Minutes held", "Exit reason"
+                ]),
+            ]
+            detail_html = []
+            for group_title, fields in detail_groups:
+                detail_html.append(f'<div class="winner-detail-section">{group_title}</div>')
+                detail_html.append('<div class="winner-detail-grid">')
+                detail_html.extend(
+                    winner_field(field, selected_record.get(field, "Not captured"))
+                    for field in fields
+                )
+                detail_html.append('</div>')
+            st.markdown(
+                '<div class="winner-selected-detail">'
+                f'<div class="winner-selected-heading">#{selected_winner + 1} · {html.escape(str(selected_record["Symbol"]))}'
+                f'<span>{html.escape(str(selected_record["Final P&L"]))}</span></div>'
+                + "".join(detail_html) + '</div>',
+                unsafe_allow_html=True
+            )
 
             liquidity_count = int((winner_view["24h quote liquidity (USDT)"] != "Not captured").sum())
             st.caption(
