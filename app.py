@@ -1050,22 +1050,8 @@ if active_page == "Overview":
                 },
             )
 
-                        # Full record is available on demand; preserve every source-derived field.
-            winner_choices = list(range(len(winner_view)))
-            selected_rank = st.selectbox(
-                "Select a winner to inspect complete details",
-                options=winner_choices,
-                format_func=lambda i: (
-                    f"#{i + 1} · {winner_view.iloc[i]['Symbol']} · "
-                    f"{winner_view.iloc[i]['Final P&L']}"
-                ),
-                key="winner_detail_selection",
-            )
-            selected = winner_view.iloc[selected_rank]
-
-            st.markdown(f"#### Winner #{selected_rank + 1} · {selected['Symbol']}")
-            st.caption("Complete record · values are taken from the R2 alert and outcome archives. Missing source values are shown as Not captured.")
-
+                        # Details are embedded in each native expander. This avoids a
+            # separate selection widget and keeps all winner records independently accessible.
             detail_fields = [
                 ("Alert time (PKT)", "Alert time (PKT)"),
                 ("Symbol", "Symbol"),
@@ -1083,30 +1069,33 @@ if active_page == "Overview":
                 ("Minutes held", "Minutes held"),
                 ("Exit reason", "Exit reason"),
             ]
-            detail_table = pd.DataFrame(
-                [
-                    {
-                        "Field": label,
-                        "Value": (
-                            "Not captured"
-                            if pd.isna(selected.get(column))
-                            or str(selected.get(column)).strip() in ("", "—")
-                            else str(selected.get(column))
-                        ),
-                    }
-                    for label, column in detail_fields
-                ]
-            )
-            st.dataframe(
-                detail_table,
-                use_container_width=True,
-                hide_index=True,
-                height= min(38 * (len(detail_table) + 1) + 8, 620),
-                column_config={
-                    "Field": st.column_config.TextColumn("Field", width="medium"),
-                    "Value": st.column_config.TextColumn("Value", width="large"),
-                },
-            )
+
+            for rank, (_, winner) in enumerate(winner_view.iterrows(), 1):
+                label = (
+                    f"#{rank} · {winner['Symbol']} · {winner['Final P&L']} "
+                    f"· Peak {winner['Peak move']}"
+                )
+                with st.expander(label, expanded=False):
+                    detail_rows = []
+                    for field_label, column in detail_fields:
+                        value = winner.get(column, "Not captured")
+                        if value is None or (isinstance(value, float) and pd.isna(value)):
+                            value = "Not captured"
+                        value = str(value).strip()
+                        if value in ("", "—", "nan", "None"):
+                            value = "Not captured"
+                        detail_rows.append({"Field": field_label, "Value": value})
+
+                    st.dataframe(
+                        pd.DataFrame(detail_rows),
+                        use_container_width=True,
+                        hide_index=True,
+                        height= min(38 * (len(detail_rows) + 1) + 8, 620),
+                        column_config={
+                            "Field": st.column_config.TextColumn("Field", width="medium"),
+                            "Value": st.column_config.TextColumn("Value", width="large"),
+                        },
+                    )
 
             liquidity_count = int((winner_view["24h quote liquidity (USDT)"] != "Not captured").sum())
             st.caption(
